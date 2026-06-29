@@ -1,3 +1,6 @@
+mod context;
+pub use context::*;
+
 use engram_core::{Convention, RepoContext, Scope, Status};
 
 /// Select the active conventions relevant to `ctx`, most-specific scope first,

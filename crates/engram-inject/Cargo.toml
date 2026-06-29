@@ -13,3 +13,4 @@ anyhow = { workspace = true }
 [dev-dependencies]
 chrono = { workspace = true }
 uuid = { workspace = true }
+tempfile = { workspace = true }
