@@ -21,7 +21,8 @@ Engram is not just an MCP server. The repo is a polyglot monorepo containing:
    catalogs, so users install Engram from each ecosystem's plugin store.
 5. **npm distribution** — a launcher package so `npx -y engram` / `npm i -g`
    work; this is also what the plugins' `.mcp.json` invokes.
-6. **Landing page** — a Vite + React + TailwindCSS v4 marketing site.
+6. **Landing page** — a Vite + React 19 (React Compiler) + TailwindCSS v4
+   marketing site, served on GitHub Pages.
 7. **CI/CD** — GitHub Actions for test/lint, cross-platform release, package
    publishing, and landing-page deploy.
 
@@ -29,8 +30,11 @@ Engram is not just an MCP server. The repo is a polyglot monorepo containing:
 
 ## 2. Directory layout
 
-The **Biome model**: a Cargo workspace and a pnpm workspace coexist at the root,
-managing disjoint directories. `just` is the language-agnostic task runner.
+A **dual-workspace polyglot layout** (the *repository structure* used by Biome,
+Oxc, and Tauri — the layout pattern, not the Biome tool): a Cargo workspace and a
+**Bun** workspace coexist at the root, managing disjoint directories. `just` is
+the language-agnostic task runner. JS lint/format/test/build run on the **Oxc
+stack via Vite+** (see §7) — explicitly not Biome.
 
 ```
 /
@@ -40,9 +44,8 @@ managing disjoint directories. `just` is the language-agnostic task runner.
 ├── dist-workspace.toml            # cargo-dist config (release matrix + installers)
 ├── release-plz.toml               # release-plz config (version/changelog/tag)
 │
-├── package.json                   # private root; dev scripts; packageManager: pnpm
-├── pnpm-workspace.yaml            # packages: ["packages/*", "apps/*"]  (NARROW)
-├── pnpm-lock.yaml                 # committed
+├── package.json                   # private root; "workspaces": ["packages/*","apps/*"] (NARROW)
+├── bun.lock                       # committed (text lockfile, Bun ≥1.2)
 │
 ├── justfile                       # `just build|test|lint|ci|sync-plugins|demo`
 ├── .gitignore                     # **/target  **/node_modules  **/dist  **/build
@@ -58,11 +61,11 @@ managing disjoint directories. `just` is the language-agnostic task runner.
 │   ├── engram-llm/                # provider trait wiring (uses agent-cli)   [Plan 2]
 │   └── engram-capture/            # session distillation + curation          [Plan 2]
 │
-├── packages/                      # ── pnpm workspace: JS distribution ──
+├── packages/                      # ── Bun workspace: JS distribution ──
 │   └── engram/                    # npm launcher (optionalDependencies + bin shim)
 │       └── (per-platform pkgs generated at release time, not committed)
 │
-├── apps/                          # ── pnpm workspace: web ──
+├── apps/                          # ── Bun workspace: web ──
 │   └── web/                       # Vite + React + Tailwind v4 landing page
 │
 ├── plugins/                       # ── plugin packaging ──
@@ -93,19 +96,19 @@ managing disjoint directories. `just` is the language-agnostic task runner.
 │
 └── .github/
     └── workflows/
-        ├── ci.yml                 # PR: cargo fmt/clippy/test + pnpm lint/build
+        ├── ci.yml                 # PR: cargo fmt/clippy/test + bun build + vite lint/test
         ├── release-plz.yml        # push main: version PR; on merge → crates.io + tag
         ├── release.yml            # cargo-dist generated: tag → binaries/npm/brew
         └── deploy-web.yml         # apps/web changes → GitHub Pages
 ```
 
 **Boundary rules (the real footguns, from research):**
-- pnpm `packages:` globs MUST stay narrow (`packages/*`, `apps/*`) — never glob
-  `crates/` or use top-level `*`/`**`, or pnpm tries to manage Rust dirs.
+- Bun `workspaces` globs MUST stay narrow (`packages/*`, `apps/*`) — never glob
+  `crates/` or use top-level `*`/`**`, or Bun tries to manage Rust dirs.
 - Cargo `members = ["crates/*"]`; use `exclude` for any stray sub-`Cargo.toml`.
 - `.gitignore` uses `**/`-prefixed globs so nested `target`/`node_modules`/`dist`
-  are all ignored. Commit `Cargo.lock` AND `pnpm-lock.yaml`; never
-  `package-lock.json`/`yarn.lock`.
+  are all ignored. Commit `Cargo.lock` AND `bun.lock` (text lockfile); never
+  `package-lock.json`/`yarn.lock`/`bun.lockb` (binary, legacy).
 
 ---
 
@@ -211,9 +214,12 @@ across ecosystems):
 
 - **rust:** `Swatinem/rust-cache@v2`; `cargo fmt --check`, `cargo clippy
   -D warnings`, `cargo test --workspace`.
-- **js:** `pnpm/action-setup@v4` → `actions/setup-node@v4` (`cache: pnpm`) →
-  `pnpm install --frozen-lockfile` → `pnpm -r lint && pnpm -r build` +
-  `just sync-plugins --check` (skills not drifted).
+- **js:** `oven-sh/setup-bun@v2` → cache `~/.bun/install/cache` (key =
+  `hashFiles('bun.lock')`) → `bun install --frozen-lockfile` →
+  `bun --filter './apps/web' build` → lint/format/test via **Vite+**
+  (`vite lint`, `vite fmt --check`, `vite test`) or the Oxc fallback
+  (`oxlint`, `oxfmt --check`, `vitest run`) → `just sync-plugins --check`
+  (skills not drifted).
 
 Path filters keep web-only and plugin-only changes from running the full matrix
 where it adds nothing, but `cargo test` always runs on any `crates/**` change.
@@ -222,21 +228,31 @@ where it adds nothing, but `cargo test` always runs on any `crates/**` change.
 
 ## 7. Landing page (`apps/web`)
 
-- **Stack:** Vite 6 + React + TailwindCSS v4 via `@tailwindcss/vite` (CSS-first:
-  one `@import "tailwindcss";`, no `tailwind.config.js`/`postcss.config.js`,
-  customization in a `@theme {}` block).
+- **Stack:** **React 19 + React Compiler** on Vite, with **TailwindCSS v4** via
+  `@tailwindcss/vite` (CSS-first: one `@import "tailwindcss";`, no
+  `tailwind.config.js`/`postcss.config.js`, customization in a `@theme {}`
+  block). Build/lint/format/test via **Vite+** (VoidZero's Oxc-based toolchain)
+  if available at Plan 5 time; otherwise plain **Vite + Vitest + Oxlint/Oxfmt**
+  — same Oxc tools, so the choice is transparent to the code.
+- **React Compiler wiring:** React Compiler 1.0 (stable, requires React 19) via
+  `@vitejs/plugin-react`; on the plugin-react v6 / Vite 8 path add
+  `@rolldown/plugin-babel`. Lint rules come from `eslint-plugin-react-hooks`
+  (the standalone `eslint-plugin-react-compiler` is deprecated). Exact import
+  for the compiler preset is verified against plugin-react release notes at
+  code-writing time (it's still settling).
 - **Content (Plan 5):** hero with the one-liner + VHS demo GIF above the fold,
   one-command install block, the "teach once → applies everywhere" story,
   feature cards, links to plugin stores + GitHub. The README and the site share
   the same demo GIF (generated by VHS, regenerated in CI so it never goes stale).
-- **Deploy:** `deploy-web.yml` builds `apps/web` and publishes to **GitHub
-  Pages** (`configure-pages` → `upload-pages-artifact` (`path: apps/web/dist`) →
-  `deploy-pages`), `base` env-driven (`/` for a custom domain or user page,
-  `/engram/` for a project page). Triggered only on `apps/web/**` (+ lockfile)
-  changes.
-- **Upgrade path:** move to **Cloudflare Pages** for `engram.dev` + automatic
-  per-PR preview deploys + commercial-safe terms when the domain/account is set
-  up. Keep the Pages workflow as the in-repo fallback.
+- **Deploy:** `deploy-web.yml` builds `apps/web` with **Bun** + Vite and
+  publishes to **GitHub Pages** (`actions/configure-pages` →
+  `upload-pages-artifact` (`path: apps/web/dist`) → `deploy-pages`), with
+  `permissions: pages:write, id-token:write` and a `pages` concurrency group.
+  `base` is env-driven: `/engram/` for the default project page
+  (`tlgimenes.github.io/engram/`), or `/` once a custom domain (`engram.dev`) is
+  configured in repo Settings → Pages. Triggered only on `apps/web/**` (+
+  `bun.lock`) changes. One-time manual step: Settings → Pages → Source = "GitHub
+  Actions".
 
 ---
 
@@ -248,12 +264,12 @@ Plan 1 is already fully detailed; the rest are scoped here.
 
 | Plan | Title | Deliverable (done = ) | Depends on |
 |---|---|---|---|
-| **0** | **Monorepo scaffold + CI** | Dual cargo+pnpm workspace, `justfile`, `rust-toolchain`, `.gitignore`, root configs, empty `apps/web` placeholder building, green `ci.yml`. | — |
+| **0** | **Monorepo scaffold + CI** | Dual cargo + Bun workspace, `justfile`, `rust-toolchain`, `.gitignore`, root configs, empty `apps/web` placeholder building, green `ci.yml`. | — |
 | **1** | **Dogfoodable core** (detailed) | `engram` binary: model + store + inject + rmcp MCP server + CLI (`learn/list/why/forget/status`); dev `.mcp.json`. Registerable on a live session. | 0 |
 | **2** | **`agent-cli` + capture/curate** | Standalone `agent-cli` crate (claude/codex/apikey); `engram-llm`; `engram-capture` (session distillation, dedup→supersession); `engram review`. | 1 |
 | **3** | **Plugin packaging** | `plugins/claude-code` + `plugins/codex` (manifests, synced skills, hooks: SessionStart inject + Stop capture, `/engram-learn`), marketplace catalogs, `.mcp.json`→npx. Dogfood the real plugin. | 2 |
 | **4** | **Release pipeline** | `release-plz.yml` + cargo-dist `release.yml`, crates.io publish (`engram-cli`, `agent-cli`), npm launcher, homebrew tap. First tagged release. | 1 (3 ideal) |
-| **5** | **Landing page** | `apps/web` Vite+React+Tailwind site with real content + demo GIF; `deploy-web.yml` to GitHub Pages. | 0 |
+| **5** | **Landing page** | `apps/web` Vite (Vite+/Oxc) + React 19 + React Compiler + Tailwind v4 site with real content + demo GIF; `deploy-web.yml` to GitHub Pages. | 0 |
 | **6** | **Launch** | README landing page, VHS demo tape in CI, MCP Registry + Anthropic plugin directory + awesome-claude-code listings, coordinated launch. | 3,4,5 |
 | **FF** | **Enforcement** (fast-follow) | `PreToolUse` hook blocking edits that violate active conventions. | 3 |
 
@@ -277,7 +293,10 @@ can land just before or right after the launch depending on momentum.
   is set in `dist-workspace.toml` anyway) or `engram-mcp`.
 - crate names on crates.io: `engram-cli` (binary), `agent-cli` (likely taken →
   candidates: `agent-cli-rs`, `claude-codex-cli`, `agentshell`).
-- Domain: register `engram.dev`? (drives Pages-vs-Cloudflare + `base` config.)
+- Domain: register `engram.dev`? Custom domain → Vite `base: '/'`; otherwise the
+  GitHub Pages project page → `base: '/engram/'`.
+- Vite+ availability at Plan 5 time: if its preview isn't usable/licensed for us,
+  fall back to Vite + Vitest + Oxlint/Oxfmt (same Oxc tools, no rework of intent).
 - Whether `agent-cli` ships in v1 or is extracted after Engram proves the seam.
 - Homebrew: personal tap (`tlgimenes/homebrew-engram`) for launch; homebrew-core
   later once popular.
