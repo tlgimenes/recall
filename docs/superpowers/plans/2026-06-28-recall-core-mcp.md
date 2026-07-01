@@ -1,10 +1,10 @@
-# Engram Plan 1 — Dogfoodable Core (model + store + inject + MCP + CLI)
+# Recall Plan 1 — Dogfoodable Core (model + store + inject + MCP + CLI)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship a real, local-first Engram binary whose MCP server serves the developer's manually-taught coding conventions, scoped by repo/branch/language — registerable on a live Claude Code/Codex session for dogfooding.
+**Goal:** Ship a real, local-first Recall binary whose MCP server serves the developer's manually-taught coding conventions, scoped by repo/branch/language — registerable on a live Claude Code/Codex session for dogfooding.
 
-**Architecture:** A Rust workspace of small, single-responsibility crates: `engram-core` (pure domain model + scoping + dedup), `engram-store` (SQLite persistence), `engram-inject` (pure selection/render + git context detection), `engram-mcp` (rmcp stdio server), `engram-cli` (the `engram` binary). LLM-based capture/curation is deliberately out of scope here (Plan 2); this plan covers manual teaching + retrieval + inspection, which is the slice that unlocks dogfooding.
+**Architecture:** A Rust workspace of small, single-responsibility crates: `recall-core` (pure domain model + scoping + dedup), `recall-store` (SQLite persistence), `recall-inject` (pure selection/render + git context detection), `recall-mcp` (rmcp stdio server), `recall-cli` (the `recall` binary). LLM-based capture/curation is deliberately out of scope here (Plan 2); this plan covers manual teaching + retrieval + inspection, which is the slice that unlocks dogfooding.
 
 **Tech Stack:** Rust (stable), `rmcp` 1.8 (official MCP SDK, macro-based), `rusqlite` (bundled SQLite, single binary), `tokio`, `clap`, `serde`/`serde_json`, `chrono`, `uuid`, `schemars` 1.0; `tempfile` for tests.
 
@@ -12,8 +12,8 @@
 
 - **Rust:** stable toolchain, `edition = "2021"`, MSRV 1.82+. One line each crate.
 - **Single static binary:** `rusqlite` MUST use `features = ["bundled"]` (no system SQLite).
-- **Binary name:** `engram`. Default DB: `~/.engram/engram.db`. Tests and dev MUST honor the `ENGRAM_DB` env var to override the DB path.
-- **No network / no LLM in this plan.** `engram-core`, `engram-store`, `engram-inject` do no network I/O. All LLM provider work is Plan 2.
+- **Binary name:** `recall`. Default DB: `~/.recall/recall.db`. Tests and dev MUST honor the `RECALL_DB` env var to override the DB path.
+- **No network / no LLM in this plan.** `recall-core`, `recall-store`, `recall-inject` do no network I/O. All LLM provider work is Plan 2.
 - **MCP:** use `rmcp = { version = "1.8", features = ["server", "macros", "transport-io", "schemars"] }`. Log to **stderr only** (stdout is the MCP transport).
 - **schemars pin:** `schemars = "1.0"`; in derives use the rmcp re-export (`use rmcp::schemars;`) to avoid version skew.
 - **Enum serde:** `Status`/`Scope`/`Source` serialize with default (externally tagged) serde; the SQLite `status` column stores the variant name string (`"Active"`, etc.) — keep these consistent.
@@ -21,23 +21,23 @@
 
 ---
 
-### Task 1: Workspace + `engram-core` domain model
+### Task 1: Workspace + `recall-core` domain model
 
 **Files:**
 - Create: `Cargo.toml` (workspace root)
-- Create: `crates/engram-core/Cargo.toml`
-- Create: `crates/engram-core/src/lib.rs`
-- Create: `crates/engram-core/src/convention.rs`
-- Test: inline `#[cfg(test)]` in `crates/engram-core/src/convention.rs`
+- Create: `crates/recall-core/Cargo.toml`
+- Create: `crates/recall-core/src/lib.rs`
+- Create: `crates/recall-core/src/convention.rs`
+- Test: inline `#[cfg(test)]` in `crates/recall-core/src/convention.rs`
 
 **Interfaces:**
-- Produces: `engram_core::{Convention, Scope, Status, Source, Provenance, RepoContext}`. Methods `Scope::specificity(&self) -> u8` (Global=0, Language=1, Repo=2, Branch=3) and `Scope::matches(&self, ctx: &RepoContext) -> bool`.
+- Produces: `recall_core::{Convention, Scope, Status, Source, Provenance, RepoContext}`. Methods `Scope::specificity(&self) -> u8` (Global=0, Language=1, Repo=2, Branch=3) and `Scope::matches(&self, ctx: &RepoContext) -> bool`.
 
 > **Reconciliation with Plan 0:** Plan 0 already created the workspace root
-> `Cargo.toml`, `crates/engram-core/Cargo.toml`, and a stub
-> `crates/engram-core/src/lib.rs` (with a `toolchain_smoke` test). So in this
+> `Cargo.toml`, `crates/recall-core/Cargo.toml`, and a stub
+> `crates/recall-core/src/lib.rs` (with a `toolchain_smoke` test). So in this
 > task: **Step 1 is a no-op** (the root `Cargo.toml` already matches — verify it);
-> **Step 2 is unchanged but already exists** (verify the deps match — engram-core
+> **Step 2 is unchanged but already exists** (verify the deps match — recall-core
 > needs `serde`, `chrono`, `uuid`); **Step 3 replaces the stub `lib.rs`** (drop
 > the smoke test); **Step 4+ proceed as written**. If Plan 0 was skipped, execute
 > Step 1 as a create.
@@ -47,13 +47,13 @@
 ```toml
 [workspace]
 resolver = "2"
-members = ["crates/engram-core"]
+members = ["crates/recall-core"]
 
 [workspace.package]
 edition = "2021"
 rust-version = "1.82"
 license = "MIT"
-repository = "https://github.com/tlgimenes/engram"
+repository = "https://github.com/tlgimenes/recall"
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
@@ -64,11 +64,11 @@ anyhow = "1"
 tempfile = "3"
 ```
 
-- [ ] **Step 2: Create `crates/engram-core/Cargo.toml`**
+- [ ] **Step 2: Create `crates/recall-core/Cargo.toml`**
 
 ```toml
 [package]
-name = "engram-core"
+name = "recall-core"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
@@ -81,14 +81,14 @@ chrono = { workspace = true }
 uuid = { workspace = true }
 ```
 
-- [ ] **Step 3: Create `crates/engram-core/src/lib.rs`**
+- [ ] **Step 3: Create `crates/recall-core/src/lib.rs`**
 
 ```rust
 mod convention;
 pub use convention::*;
 ```
 
-- [ ] **Step 4: Write the failing test in `crates/engram-core/src/convention.rs`**
+- [ ] **Step 4: Write the failing test in `crates/recall-core/src/convention.rs`**
 
 Put this at the bottom of the file (the types above it come in Step 6):
 
@@ -141,10 +141,10 @@ mod tests {
 
 - [ ] **Step 5: Run the test to verify it fails**
 
-Run: `cargo test -p engram-core`
+Run: `cargo test -p recall-core`
 Expected: FAIL — `cannot find type RepoContext`/`Scope` (types not defined yet).
 
-- [ ] **Step 6: Write the model at the top of `crates/engram-core/src/convention.rs`** (above the `#[cfg(test)]` block)
+- [ ] **Step 6: Write the model at the top of `crates/recall-core/src/convention.rs`** (above the `#[cfg(test)]` block)
 
 ```rust
 use chrono::{DateTime, Utc};
@@ -217,7 +217,7 @@ pub struct Convention {
     pub updated_at: DateTime<Utc>,
 }
 
-/// The resolved context Engram injects conventions for.
+/// The resolved context Recall injects conventions for.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct RepoContext {
     pub remote_id: Option<String>,
@@ -228,13 +228,13 @@ pub struct RepoContext {
 
 - [ ] **Step 7: Run the test to verify it passes**
 
-Run: `cargo test -p engram-core`
+Run: `cargo test -p recall-core`
 Expected: PASS (4 tests).
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add Cargo.toml crates/engram-core
+git add Cargo.toml crates/recall-core
 git commit -m "feat(core): workspace + convention domain model with scope matching
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -242,18 +242,18 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ---
 
-### Task 2: `engram-core` — rule normalization + dedup decision
+### Task 2: `recall-core` — rule normalization + dedup decision
 
 **Files:**
-- Create: `crates/engram-core/src/supersede.rs`
-- Modify: `crates/engram-core/src/lib.rs` (add `mod supersede; pub use supersede::*;`)
-- Test: inline `#[cfg(test)]` in `crates/engram-core/src/supersede.rs`
+- Create: `crates/recall-core/src/supersede.rs`
+- Modify: `crates/recall-core/src/lib.rs` (add `mod supersede; pub use supersede::*;`)
+- Test: inline `#[cfg(test)]` in `crates/recall-core/src/supersede.rs`
 
 **Interfaces:**
-- Produces: `engram_core::normalize_rule(s: &str) -> String`; `engram_core::DedupDecision` (`New` | `Corroborates(Uuid)`); `engram_core::dedup_decision(new_rule: &str, new_scope: &Scope, existing: &[Convention]) -> DedupDecision`.
+- Produces: `recall_core::normalize_rule(s: &str) -> String`; `recall_core::DedupDecision` (`New` | `Corroborates(Uuid)`); `recall_core::dedup_decision(new_rule: &str, new_scope: &Scope, existing: &[Convention]) -> DedupDecision`.
 - Consumes: `Convention`, `Scope`, `Status` from Task 1.
 
-- [ ] **Step 1: Add module wiring to `crates/engram-core/src/lib.rs`**
+- [ ] **Step 1: Add module wiring to `crates/recall-core/src/lib.rs`**
 
 ```rust
 mod convention;
@@ -262,7 +262,7 @@ pub use convention::*;
 pub use supersede::*;
 ```
 
-- [ ] **Step 2: Write the failing test in `crates/engram-core/src/supersede.rs`**
+- [ ] **Step 2: Write the failing test in `crates/recall-core/src/supersede.rs`**
 
 ```rust
 #[cfg(test)]
@@ -329,10 +329,10 @@ mod tests {
 
 - [ ] **Step 3: Run the test to verify it fails**
 
-Run: `cargo test -p engram-core supersede`
+Run: `cargo test -p recall-core supersede`
 Expected: FAIL — `cannot find function normalize_rule`.
 
-- [ ] **Step 4: Write the implementation at the top of `crates/engram-core/src/supersede.rs`**
+- [ ] **Step 4: Write the implementation at the top of `crates/recall-core/src/supersede.rs`**
 
 ```rust
 use crate::{Convention, Scope, Status};
@@ -366,13 +366,13 @@ pub fn dedup_decision(new_rule: &str, new_scope: &Scope, existing: &[Convention]
 
 - [ ] **Step 5: Run the test to verify it passes**
 
-Run: `cargo test -p engram-core`
+Run: `cargo test -p recall-core`
 Expected: PASS (8 tests total).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add crates/engram-core
+git add crates/recall-core
 git commit -m "feat(core): rule normalization + dedup decision
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -380,17 +380,17 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ---
 
-### Task 3: `engram-core` — git remote normalization
+### Task 3: `recall-core` — git remote normalization
 
 **Files:**
-- Create: `crates/engram-core/src/remote.rs`
-- Modify: `crates/engram-core/src/lib.rs` (add `mod remote; pub use remote::*;`)
-- Test: inline `#[cfg(test)]` in `crates/engram-core/src/remote.rs`
+- Create: `crates/recall-core/src/remote.rs`
+- Modify: `crates/recall-core/src/lib.rs` (add `mod remote; pub use remote::*;`)
+- Test: inline `#[cfg(test)]` in `crates/recall-core/src/remote.rs`
 
 **Interfaces:**
-- Produces: `engram_core::normalize_remote(url: &str) -> String` → canonical `host/owner/repo`, lowercased, no scheme/creds/`.git`.
+- Produces: `recall_core::normalize_remote(url: &str) -> String` → canonical `host/owner/repo`, lowercased, no scheme/creds/`.git`.
 
-- [ ] **Step 1: Add module wiring to `crates/engram-core/src/lib.rs`**
+- [ ] **Step 1: Add module wiring to `crates/recall-core/src/lib.rs`**
 
 ```rust
 mod convention;
@@ -401,7 +401,7 @@ pub use remote::*;
 pub use supersede::*;
 ```
 
-- [ ] **Step 2: Write the failing test in `crates/engram-core/src/remote.rs`**
+- [ ] **Step 2: Write the failing test in `crates/recall-core/src/remote.rs`**
 
 ```rust
 #[cfg(test)]
@@ -435,10 +435,10 @@ mod tests {
 
 - [ ] **Step 3: Run the test to verify it fails**
 
-Run: `cargo test -p engram-core remote`
+Run: `cargo test -p recall-core remote`
 Expected: FAIL — `cannot find function normalize_remote`.
 
-- [ ] **Step 4: Write the implementation at the top of `crates/engram-core/src/remote.rs`**
+- [ ] **Step 4: Write the implementation at the top of `crates/recall-core/src/remote.rs`**
 
 ```rust
 /// Normalize a git remote URL to a canonical `host/owner/repo` identifier so the
@@ -460,13 +460,13 @@ pub fn normalize_remote(url: &str) -> String {
 
 - [ ] **Step 5: Run the test to verify it passes**
 
-Run: `cargo test -p engram-core`
+Run: `cargo test -p recall-core`
 Expected: PASS (12 tests total).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add crates/engram-core
+git add crates/recall-core
 git commit -m "feat(core): normalize git remote URLs to host/owner/repo
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -474,29 +474,29 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ---
 
-### Task 4: `engram-store` — SQLite persistence
+### Task 4: `recall-store` — SQLite persistence
 
 **Files:**
-- Create: `crates/engram-store/Cargo.toml`
-- Create: `crates/engram-store/src/lib.rs`
-- Modify: `Cargo.toml` (add `crates/engram-store` to `members`)
-- Test: inline `#[cfg(test)]` in `crates/engram-store/src/lib.rs`
+- Create: `crates/recall-store/Cargo.toml`
+- Create: `crates/recall-store/src/lib.rs`
+- Modify: `Cargo.toml` (add `crates/recall-store` to `members`)
+- Test: inline `#[cfg(test)]` in `crates/recall-store/src/lib.rs`
 
 **Interfaces:**
-- Produces: `engram_store::Store` with `open(&Path) -> Result<Store>`, `open_in_memory() -> Result<Store>`, `add(&Convention) -> Result<()>`, `get(Uuid) -> Result<Option<Convention>>`, `all() -> Result<Vec<Convention>>`, `active() -> Result<Vec<Convention>>`, `retire(Uuid) -> Result<bool>`, `add_curated(&Convention) -> Result<Uuid>`.
-- Consumes: `Convention`, `Status`, `dedup_decision`, `DedupDecision` from `engram-core`.
+- Produces: `recall_store::Store` with `open(&Path) -> Result<Store>`, `open_in_memory() -> Result<Store>`, `add(&Convention) -> Result<()>`, `get(Uuid) -> Result<Option<Convention>>`, `all() -> Result<Vec<Convention>>`, `active() -> Result<Vec<Convention>>`, `retire(Uuid) -> Result<bool>`, `add_curated(&Convention) -> Result<Uuid>`.
+- Consumes: `Convention`, `Status`, `dedup_decision`, `DedupDecision` from `recall-core`.
 
 - [ ] **Step 1: Add the crate to the workspace `members` in root `Cargo.toml`**
 
 ```toml
-members = ["crates/engram-core", "crates/engram-store"]
+members = ["crates/recall-core", "crates/recall-store"]
 ```
 
-- [ ] **Step 2: Create `crates/engram-store/Cargo.toml`**
+- [ ] **Step 2: Create `crates/recall-store/Cargo.toml`**
 
 ```toml
 [package]
-name = "engram-store"
+name = "recall-store"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
@@ -504,14 +504,14 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-engram-core = { path = "../engram-core" }
+recall-core = { path = "../recall-core" }
 rusqlite = { version = "0.32", features = ["bundled"] }
 serde_json = { workspace = true }
 uuid = { workspace = true }
 anyhow = { workspace = true }
 ```
 
-- [ ] **Step 3: Write the failing test in `crates/engram-store/src/lib.rs`**
+- [ ] **Step 3: Write the failing test in `crates/recall-store/src/lib.rs`**
 
 Put at the bottom of the file:
 
@@ -519,7 +519,7 @@ Put at the bottom of the file:
 #[cfg(test)]
 mod tests {
     use super::*;
-    use engram_core::*;
+    use recall_core::*;
     use chrono::Utc;
     use uuid::Uuid;
 
@@ -569,14 +569,14 @@ mod tests {
 
 - [ ] **Step 4: Run the test to verify it fails**
 
-Run: `cargo test -p engram-store`
+Run: `cargo test -p recall-store`
 Expected: FAIL — `cannot find type Store`.
 
-- [ ] **Step 5: Write the implementation at the top of `crates/engram-store/src/lib.rs`**
+- [ ] **Step 5: Write the implementation at the top of `crates/recall-store/src/lib.rs`**
 
 ```rust
 use anyhow::Result;
-use engram_core::{dedup_decision, Convention, DedupDecision, Status};
+use recall_core::{dedup_decision, Convention, DedupDecision, Status};
 use rusqlite::{params, Connection};
 use std::path::Path;
 use uuid::Uuid;
@@ -693,13 +693,13 @@ fn status_str(s: &Status) -> &'static str {
 
 - [ ] **Step 6: Run the test to verify it passes**
 
-Run: `cargo test -p engram-store`
+Run: `cargo test -p recall-store`
 Expected: PASS (3 tests).
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add Cargo.toml crates/engram-store
+git add Cargo.toml crates/recall-store
 git commit -m "feat(store): SQLite persistence with dedup-aware add
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -707,29 +707,29 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ---
 
-### Task 5: `engram-inject` — selection + render (pure)
+### Task 5: `recall-inject` — selection + render (pure)
 
 **Files:**
-- Create: `crates/engram-inject/Cargo.toml`
-- Create: `crates/engram-inject/src/lib.rs`
-- Modify: `Cargo.toml` (add `crates/engram-inject` to `members`)
-- Test: inline `#[cfg(test)]` in `crates/engram-inject/src/lib.rs`
+- Create: `crates/recall-inject/Cargo.toml`
+- Create: `crates/recall-inject/src/lib.rs`
+- Modify: `Cargo.toml` (add `crates/recall-inject` to `members`)
+- Test: inline `#[cfg(test)]` in `crates/recall-inject/src/lib.rs`
 
 **Interfaces:**
-- Produces: `engram_inject::select(convs: &[Convention], ctx: &RepoContext, budget_chars: usize) -> Vec<Convention>`; `engram_inject::render(convs: &[Convention]) -> String`; `engram_inject::scope_label(scope: &Scope) -> String`.
-- Consumes: `Convention`, `RepoContext`, `Scope`, `Status` from `engram-core`.
+- Produces: `recall_inject::select(convs: &[Convention], ctx: &RepoContext, budget_chars: usize) -> Vec<Convention>`; `recall_inject::render(convs: &[Convention]) -> String`; `recall_inject::scope_label(scope: &Scope) -> String`.
+- Consumes: `Convention`, `RepoContext`, `Scope`, `Status` from `recall-core`.
 
 - [ ] **Step 1: Add the crate to the workspace `members` in root `Cargo.toml`**
 
 ```toml
-members = ["crates/engram-core", "crates/engram-store", "crates/engram-inject"]
+members = ["crates/recall-core", "crates/recall-store", "crates/recall-inject"]
 ```
 
-- [ ] **Step 2: Create `crates/engram-inject/Cargo.toml`**
+- [ ] **Step 2: Create `crates/recall-inject/Cargo.toml`**
 
 ```toml
 [package]
-name = "engram-inject"
+name = "recall-inject"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
@@ -737,11 +737,11 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-engram-core = { path = "../engram-core" }
+recall-core = { path = "../recall-core" }
 anyhow = { workspace = true }
 ```
 
-- [ ] **Step 3: Write the failing test in `crates/engram-inject/src/lib.rs`**
+- [ ] **Step 3: Write the failing test in `crates/recall-inject/src/lib.rs`**
 
 Put at the bottom of the file:
 
@@ -749,7 +749,7 @@ Put at the bottom of the file:
 #[cfg(test)]
 mod tests {
     use super::*;
-    use engram_core::*;
+    use recall_core::*;
     use chrono::Utc;
     use uuid::Uuid;
 
@@ -813,13 +813,13 @@ mod tests {
 
 - [ ] **Step 4: Run the test to verify it fails**
 
-Run: `cargo test -p engram-inject`
+Run: `cargo test -p recall-inject`
 Expected: FAIL — `cannot find function select`.
 
-- [ ] **Step 5: Write the implementation at the top of `crates/engram-inject/src/lib.rs`**
+- [ ] **Step 5: Write the implementation at the top of `crates/recall-inject/src/lib.rs`**
 
 ```rust
-use engram_core::{Convention, RepoContext, Scope, Status};
+use recall_core::{Convention, RepoContext, Scope, Status};
 
 /// Select the active conventions relevant to `ctx`, most-specific scope first,
 /// then highest confidence, then most recent — capped to a character budget.
@@ -860,7 +860,7 @@ pub fn render(convs: &[Convention]) -> String {
     if convs.is_empty() {
         return String::new();
     }
-    let mut s = String::from("# Your coding conventions (via Engram)\n\n");
+    let mut s = String::from("# Your coding conventions (via Recall)\n\n");
     for c in convs {
         s.push_str(&format!("- {} _({})_\n", c.rule.trim(), scope_label(&c.scope)));
     }
@@ -880,13 +880,13 @@ pub fn scope_label(scope: &Scope) -> String {
 
 - [ ] **Step 6: Run the test to verify it passes**
 
-Run: `cargo test -p engram-inject`
+Run: `cargo test -p recall-inject`
 Expected: PASS (4 tests).
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add Cargo.toml crates/engram-inject
+git add Cargo.toml crates/recall-inject
 git commit -m "feat(inject): scope-aware selection + Markdown render
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -894,33 +894,33 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ---
 
-### Task 6: `engram-inject` — git context detection
+### Task 6: `recall-inject` — git context detection
 
 **Files:**
-- Create: `crates/engram-inject/src/context.rs`
-- Modify: `crates/engram-inject/src/lib.rs` (add `mod context; pub use context::*;`)
-- Test: inline `#[cfg(test)]` in `crates/engram-inject/src/context.rs`
-- Modify: `crates/engram-inject/Cargo.toml` (add `tempfile` dev-dependency)
+- Create: `crates/recall-inject/src/context.rs`
+- Modify: `crates/recall-inject/src/lib.rs` (add `mod context; pub use context::*;`)
+- Test: inline `#[cfg(test)]` in `crates/recall-inject/src/context.rs`
+- Modify: `crates/recall-inject/Cargo.toml` (add `tempfile` dev-dependency)
 
 **Interfaces:**
-- Produces: `engram_inject::detect_context(cwd: &Path) -> RepoContext`.
-- Consumes: `engram_core::{RepoContext, normalize_remote}`.
+- Produces: `recall_inject::detect_context(cwd: &Path) -> RepoContext`.
+- Consumes: `recall_core::{RepoContext, normalize_remote}`.
 
-- [ ] **Step 1: Add a dev-dependency to `crates/engram-inject/Cargo.toml`**
+- [ ] **Step 1: Add a dev-dependency to `crates/recall-inject/Cargo.toml`**
 
 ```toml
 [dev-dependencies]
 tempfile = { workspace = true }
 ```
 
-- [ ] **Step 2: Add module wiring to `crates/engram-inject/src/lib.rs`** (add these two lines at the top, keep existing code)
+- [ ] **Step 2: Add module wiring to `crates/recall-inject/src/lib.rs`** (add these two lines at the top, keep existing code)
 
 ```rust
 mod context;
 pub use context::*;
 ```
 
-- [ ] **Step 3: Write the failing test in `crates/engram-inject/src/context.rs`**
+- [ ] **Step 3: Write the failing test in `crates/recall-inject/src/context.rs`**
 
 ```rust
 #[cfg(test)]
@@ -959,13 +959,13 @@ mod tests {
 
 - [ ] **Step 4: Run the test to verify it fails**
 
-Run: `cargo test -p engram-inject context`
+Run: `cargo test -p recall-inject context`
 Expected: FAIL — `cannot find function detect_context`.
 
-- [ ] **Step 5: Write the implementation at the top of `crates/engram-inject/src/context.rs`**
+- [ ] **Step 5: Write the implementation at the top of `crates/recall-inject/src/context.rs`**
 
 ```rust
-use engram_core::{normalize_remote, RepoContext};
+use recall_core::{normalize_remote, RepoContext};
 use std::path::Path;
 use std::process::Command;
 
@@ -1007,13 +1007,13 @@ fn detect_languages(cwd: &Path) -> Vec<String> {
 
 - [ ] **Step 6: Run the test to verify it passes**
 
-Run: `cargo test -p engram-inject`
+Run: `cargo test -p recall-inject`
 Expected: PASS (6 tests). Note: requires `git` on PATH (true in dev/CI).
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add crates/engram-inject
+git add crates/recall-inject
 git commit -m "feat(inject): detect repo context (remote/branch/languages) via git
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -1021,31 +1021,31 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ---
 
-### Task 7: `engram-mcp` — handler logic (testable) + rmcp stdio server
+### Task 7: `recall-mcp` — handler logic (testable) + rmcp stdio server
 
 **Files:**
-- Create: `crates/engram-mcp/Cargo.toml`
-- Create: `crates/engram-mcp/src/lib.rs`
-- Modify: `Cargo.toml` (add `crates/engram-mcp` to `members`)
-- Test: inline `#[cfg(test)]` in `crates/engram-mcp/src/lib.rs`
+- Create: `crates/recall-mcp/Cargo.toml`
+- Create: `crates/recall-mcp/src/lib.rs`
+- Modify: `Cargo.toml` (add `crates/recall-mcp` to `members`)
+- Test: inline `#[cfg(test)]` in `crates/recall-mcp/src/lib.rs`
 
 **Interfaces:**
-- Produces: `engram_mcp::handle_list(db_path: &Path) -> anyhow::Result<String>`; `engram_mcp::handle_conventions(db_path: &Path, cwd: Option<&str>) -> anyhow::Result<String>`; `engram_mcp::run_stdio(db_path: PathBuf) -> anyhow::Result<()>` (async).
-- Consumes: `engram_store::Store`; `engram_inject::{select, render, detect_context}`.
+- Produces: `recall_mcp::handle_list(db_path: &Path) -> anyhow::Result<String>`; `recall_mcp::handle_conventions(db_path: &Path, cwd: Option<&str>) -> anyhow::Result<String>`; `recall_mcp::run_stdio(db_path: PathBuf) -> anyhow::Result<()>` (async).
+- Consumes: `recall_store::Store`; `recall_inject::{select, render, detect_context}`.
 
 > **rmcp note for the implementer:** the macro identifiers below are verified against rmcp 1.8 (`#[tool_router]`, `#[tool_handler]`, `ContentBlock::text`, `ServiceExt::serve`, `transport::stdio`). The one import to confirm against the canonical example is `ToolRouter`'s path — this plan uses `rmcp::handler::server::tool::ToolRouter`. If the compiler rejects it, copy the exact `use` line from the counter example (https://github.com/modelcontextprotocol/rust-sdk/blob/main/examples/servers/src/common/counter.rs); the compiler error will name the correct path. Everything else compiles as written.
 
 - [ ] **Step 1: Add the crate to the workspace `members` in root `Cargo.toml`**
 
 ```toml
-members = ["crates/engram-core", "crates/engram-store", "crates/engram-inject", "crates/engram-mcp"]
+members = ["crates/recall-core", "crates/recall-store", "crates/recall-inject", "crates/recall-mcp"]
 ```
 
-- [ ] **Step 2: Create `crates/engram-mcp/Cargo.toml`**
+- [ ] **Step 2: Create `crates/recall-mcp/Cargo.toml`**
 
 ```toml
 [package]
-name = "engram-mcp"
+name = "recall-mcp"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
@@ -1053,9 +1053,9 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-engram-core = { path = "../engram-core" }
-engram-store = { path = "../engram-store" }
-engram-inject = { path = "../engram-inject" }
+recall-core = { path = "../recall-core" }
+recall-store = { path = "../recall-store" }
+recall-inject = { path = "../recall-inject" }
 rmcp = { version = "1.8", features = ["server", "macros", "transport-io", "schemars"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-std"] }
 serde = { workspace = true }
@@ -1066,7 +1066,7 @@ chrono = { workspace = true }
 uuid = { workspace = true }
 ```
 
-- [ ] **Step 3: Write the failing test in `crates/engram-mcp/src/lib.rs`**
+- [ ] **Step 3: Write the failing test in `crates/recall-mcp/src/lib.rs`**
 
 Put at the bottom of the file:
 
@@ -1074,8 +1074,8 @@ Put at the bottom of the file:
 #[cfg(test)]
 mod tests {
     use super::{handle_conventions, handle_list};
-    use engram_core::*;
-    use engram_store::Store;
+    use recall_core::*;
+    use recall_store::Store;
     use chrono::Utc;
     use uuid::Uuid;
 
@@ -1096,7 +1096,7 @@ mod tests {
     #[test]
     fn handle_list_returns_seeded_rule() {
         let tmp = tempfile::tempdir().unwrap();
-        let db = tmp.path().join("engram.db");
+        let db = tmp.path().join("recall.db");
         seed(&db);
         let out = handle_list(&db).unwrap();
         assert!(out.contains("Use early returns"));
@@ -1105,7 +1105,7 @@ mod tests {
     #[test]
     fn handle_conventions_includes_global_rule() {
         let tmp = tempfile::tempdir().unwrap();
-        let db = tmp.path().join("engram.db");
+        let db = tmp.path().join("recall.db");
         seed(&db);
         // A non-git cwd: remote_id is None, but Global conventions still match.
         let cwd = tempfile::tempdir().unwrap();
@@ -1116,14 +1116,14 @@ mod tests {
     #[test]
     fn handle_list_empty_db_is_friendly() {
         let tmp = tempfile::tempdir().unwrap();
-        let db = tmp.path().join("engram.db");
+        let db = tmp.path().join("recall.db");
         let out = handle_list(&db).unwrap();
         assert!(out.to_lowercase().contains("no conventions"));
     }
 }
 ```
 
-Also add `tempfile` to the dev-dependencies in `crates/engram-mcp/Cargo.toml`:
+Also add `tempfile` to the dev-dependencies in `crates/recall-mcp/Cargo.toml`:
 
 ```toml
 [dev-dependencies]
@@ -1134,18 +1134,18 @@ tempfile = { workspace = true }
 
 - [ ] **Step 4: Run the test to verify it fails**
 
-Run: `cargo test -p engram-mcp`
+Run: `cargo test -p recall-mcp`
 Expected: FAIL — `cannot find function handle_list`.
 
-- [ ] **Step 5: Write the implementation at the top of `crates/engram-mcp/src/lib.rs`**
+- [ ] **Step 5: Write the implementation at the top of `crates/recall-mcp/src/lib.rs`**
 
 ```rust
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use anyhow::Result;
-use engram_inject::{detect_context, render, select};
-use engram_store::Store;
+use recall_inject::{detect_context, render, select};
+use recall_store::Store;
 use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
@@ -1157,7 +1157,7 @@ use rmcp::{ErrorData as McpError, ServerHandler, ServiceExt};
 
 const BUDGET_CHARS: usize = 4000;
 
-/// Plain, testable handler for the `engram_list` tool.
+/// Plain, testable handler for the `recall_list` tool.
 pub fn handle_list(db_path: &Path) -> Result<String> {
     let store = Store::open(db_path)?;
     let convs = store.active()?;
@@ -1165,7 +1165,7 @@ pub fn handle_list(db_path: &Path) -> Result<String> {
     Ok(non_empty(rendered))
 }
 
-/// Plain, testable handler for the `engram_conventions` tool.
+/// Plain, testable handler for the `recall_conventions` tool.
 pub fn handle_conventions(db_path: &Path, cwd: Option<&str>) -> Result<String> {
     let store = Store::open(db_path)?;
     let convs = store.active()?;
@@ -1180,7 +1180,7 @@ pub fn handle_conventions(db_path: &Path, cwd: Option<&str>) -> Result<String> {
 
 fn non_empty(s: String) -> String {
     if s.is_empty() {
-        "No conventions recorded yet. Teach one with: engram learn \"...\"".to_string()
+        "No conventions recorded yet. Teach one with: recall learn \"...\"".to_string()
     } else {
         s
     }
@@ -1193,12 +1193,12 @@ pub struct ConventionsParams {
 }
 
 #[derive(Clone)]
-pub struct Engram {
+pub struct Recall {
     db_path: Arc<PathBuf>,
-    tool_router: ToolRouter<Engram>,
+    tool_router: ToolRouter<Recall>,
 }
 
-impl Engram {
+impl Recall {
     pub fn new(db_path: PathBuf) -> Self {
         Self {
             db_path: Arc::new(db_path),
@@ -1208,11 +1208,11 @@ impl Engram {
 }
 
 #[tool_router]
-impl Engram {
+impl Recall {
     #[tool(
         description = "Get the developer's coding conventions relevant to the current repo, branch, and languages. Call this before writing code."
     )]
-    fn engram_conventions(
+    fn recall_conventions(
         &self,
         Parameters(p): Parameters<ConventionsParams>,
     ) -> Result<CallToolResult, McpError> {
@@ -1222,7 +1222,7 @@ impl Engram {
     }
 
     #[tool(description = "List all of the developer's active coding conventions across every scope.")]
-    fn engram_list(&self) -> Result<CallToolResult, McpError> {
+    fn recall_list(&self) -> Result<CallToolResult, McpError> {
         let text = handle_list(&self.db_path)
             .map_err(|e| McpError::internal_error(e.to_string(), None))?;
         Ok(CallToolResult::success(vec![ContentBlock::text(text)]))
@@ -1230,23 +1230,23 @@ impl Engram {
 }
 
 #[tool_handler]
-impl ServerHandler for Engram {
+impl ServerHandler for Recall {
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::from_build_env())
             .with_protocol_version(ProtocolVersion::V_2024_11_05)
             .with_instructions(
-                "Engram is the developer's personal coding-convention brain. \
-                 Call engram_conventions before writing or editing code so you \
+                "Recall is the developer's personal coding-convention brain. \
+                 Call recall_conventions before writing or editing code so you \
                  follow how this developer likes code written."
                     .to_string(),
             )
     }
 }
 
-/// Run the Engram MCP server over stdio until the client disconnects.
+/// Run the Recall MCP server over stdio until the client disconnects.
 pub async fn run_stdio(db_path: PathBuf) -> Result<()> {
-    let service = Engram::new(db_path).serve(stdio()).await?;
+    let service = Recall::new(db_path).serve(stdio()).await?;
     service.waiting().await?;
     Ok(())
 }
@@ -1254,7 +1254,7 @@ pub async fn run_stdio(db_path: PathBuf) -> Result<()> {
 
 - [ ] **Step 6: Run the test to verify it passes**
 
-Run: `cargo test -p engram-mcp`
+Run: `cargo test -p recall-mcp`
 Expected: PASS (3 tests). If `ToolRouter`'s import path is rejected, fix it per the rmcp note above, then re-run.
 
 - [ ] **Step 7: Verify the whole workspace builds**
@@ -1265,38 +1265,38 @@ Expected: builds cleanly (downloads/compiles rmcp on first run).
 - [ ] **Step 8: Commit**
 
 ```bash
-git add Cargo.toml crates/engram-mcp
-git commit -m "feat(mcp): rmcp stdio server exposing engram_conventions + engram_list
+git add Cargo.toml crates/recall-mcp
+git commit -m "feat(mcp): rmcp stdio server exposing recall_conventions + recall_list
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
 
 ---
 
-### Task 8: `engram-cli` — binary skeleton, lib commands, `mcp` + `learn` + `list`
+### Task 8: `recall-cli` — binary skeleton, lib commands, `mcp` + `learn` + `list`
 
 **Files:**
-- Create: `crates/engram-cli/Cargo.toml`
-- Create: `crates/engram-cli/src/lib.rs`
-- Create: `crates/engram-cli/src/main.rs`
-- Modify: `Cargo.toml` (add `crates/engram-cli` to `members`)
-- Test: inline `#[cfg(test)]` in `crates/engram-cli/src/lib.rs`
+- Create: `crates/recall-cli/Cargo.toml`
+- Create: `crates/recall-cli/src/lib.rs`
+- Create: `crates/recall-cli/src/main.rs`
+- Modify: `Cargo.toml` (add `crates/recall-cli` to `members`)
+- Test: inline `#[cfg(test)]` in `crates/recall-cli/src/lib.rs`
 
 **Interfaces:**
-- Produces: `engram_cli::{parse_scope, cmd_learn, cmd_list, cmd_why, cmd_forget, cmd_status}` (the latter two are completed in Task 9). Binary `engram` with subcommands `mcp|learn|list|why|forget|status`.
-- Consumes: everything from `engram-core`, `engram-store`, `engram-inject`, `engram-mcp`.
+- Produces: `recall_cli::{parse_scope, cmd_learn, cmd_list, cmd_why, cmd_forget, cmd_status}` (the latter two are completed in Task 9). Binary `recall` with subcommands `mcp|learn|list|why|forget|status`.
+- Consumes: everything from `recall-core`, `recall-store`, `recall-inject`, `recall-mcp`.
 
 - [ ] **Step 1: Add the crate to the workspace `members` in root `Cargo.toml`**
 
 ```toml
-members = ["crates/engram-core", "crates/engram-store", "crates/engram-inject", "crates/engram-mcp", "crates/engram-cli"]
+members = ["crates/recall-core", "crates/recall-store", "crates/recall-inject", "crates/recall-mcp", "crates/recall-cli"]
 ```
 
-- [ ] **Step 2: Create `crates/engram-cli/Cargo.toml`**
+- [ ] **Step 2: Create `crates/recall-cli/Cargo.toml`**
 
 ```toml
 [package]
-name = "engram-cli"
+name = "recall-cli"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
@@ -1304,18 +1304,18 @@ license.workspace = true
 repository.workspace = true
 
 [lib]
-name = "engram_cli"
+name = "recall_cli"
 path = "src/lib.rs"
 
 [[bin]]
-name = "engram"
+name = "recall"
 path = "src/main.rs"
 
 [dependencies]
-engram-core = { path = "../engram-core" }
-engram-store = { path = "../engram-store" }
-engram-inject = { path = "../engram-inject" }
-engram-mcp = { path = "../engram-mcp" }
+recall-core = { path = "../recall-core" }
+recall-store = { path = "../recall-store" }
+recall-inject = { path = "../recall-inject" }
+recall-mcp = { path = "../recall-mcp" }
 clap = { version = "4", features = ["derive"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-std"] }
 chrono = { workspace = true }
@@ -1326,7 +1326,7 @@ anyhow = { workspace = true }
 tempfile = { workspace = true }
 ```
 
-- [ ] **Step 3: Write the failing test in `crates/engram-cli/src/lib.rs`**
+- [ ] **Step 3: Write the failing test in `crates/recall-cli/src/lib.rs`**
 
 Put at the bottom of the file:
 
@@ -1334,7 +1334,7 @@ Put at the bottom of the file:
 #[cfg(test)]
 mod tests {
     use super::*;
-    use engram_core::Scope;
+    use recall_core::Scope;
 
     #[test]
     fn parse_scope_global_and_language() {
@@ -1350,7 +1350,7 @@ mod tests {
     #[test]
     fn learn_then_list_roundtrip() {
         let tmp = tempfile::tempdir().unwrap();
-        let db = tmp.path().join("engram.db");
+        let db = tmp.path().join("recall.db");
         let msg = cmd_learn(&db, "Use early returns", "global", vec!["style".into()]).unwrap();
         assert!(msg.contains("Use early returns"));
         let listed = cmd_list(&db).unwrap();
@@ -1362,17 +1362,17 @@ mod tests {
 
 - [ ] **Step 4: Run the test to verify it fails**
 
-Run: `cargo test -p engram-cli`
+Run: `cargo test -p recall-cli`
 Expected: FAIL — `cannot find function parse_scope`.
 
-- [ ] **Step 5: Write `crates/engram-cli/src/lib.rs`** (above the test block)
+- [ ] **Step 5: Write `crates/recall-cli/src/lib.rs`** (above the test block)
 
 ```rust
 use anyhow::{anyhow, Result};
 use chrono::Utc;
-use engram_core::{Convention, Provenance, Scope, Source, Status};
-use engram_inject::{detect_context, scope_label};
-use engram_store::Store;
+use recall_core::{Convention, Provenance, Scope, Source, Status};
+use recall_inject::{detect_context, scope_label};
+use recall_store::Store;
 use std::path::Path;
 use uuid::Uuid;
 
@@ -1437,7 +1437,7 @@ pub fn cmd_list(db: &Path) -> Result<String> {
     let store = Store::open(db)?;
     let convs = store.active()?;
     if convs.is_empty() {
-        return Ok("No conventions yet. Teach one: engram learn \"...\"".to_string());
+        return Ok("No conventions yet. Teach one: recall learn \"...\"".to_string());
     }
     let mut s = String::new();
     for c in &convs {
@@ -1449,10 +1449,10 @@ pub fn cmd_list(db: &Path) -> Result<String> {
 
 - [ ] **Step 6: Run the lib test to verify it passes**
 
-Run: `cargo test -p engram-cli`
+Run: `cargo test -p recall-cli`
 Expected: PASS (3 tests).
 
-- [ ] **Step 7: Write `crates/engram-cli/src/main.rs`**
+- [ ] **Step 7: Write `crates/recall-cli/src/main.rs`**
 
 > Note: `cmd_why`, `cmd_forget`, and `cmd_status` are implemented in Task 9. To keep this task compiling, this `main.rs` already wires them; implement Task 9 immediately after so the binary builds. (If you must build between tasks, temporarily stub the three with `todo!()` — but Task 9 follows directly.)
 
@@ -1462,7 +1462,7 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(name = "engram", version, about = "Your personal coding-convention brain")]
+#[command(name = "recall", version, about = "Your personal coding-convention brain")]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,
@@ -1470,9 +1470,9 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// Run the Engram MCP server over stdio
+    /// Run the Recall MCP server over stdio
     Mcp,
-    /// Teach Engram a convention
+    /// Teach Recall a convention
     Learn {
         /// The rule, e.g. "Import directly; no barrel files"
         rule: String,
@@ -1495,16 +1495,16 @@ enum Cmd {
         /// Convention id (or unique prefix)
         id: String,
     },
-    /// Show Engram status
+    /// Show Recall status
     Status,
 }
 
 fn db_path() -> PathBuf {
-    if let Ok(p) = std::env::var("ENGRAM_DB") {
+    if let Ok(p) = std::env::var("RECALL_DB") {
         return PathBuf::from(p);
     }
     let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-    PathBuf::from(home).join(".engram").join("engram.db")
+    PathBuf::from(home).join(".recall").join("recall.db")
 }
 
 #[tokio::main]
@@ -1512,14 +1512,14 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
     let db = db_path();
     match cli.cmd {
-        Cmd::Mcp => engram_mcp::run_stdio(db).await?,
+        Cmd::Mcp => recall_mcp::run_stdio(db).await?,
         Cmd::Learn { rule, scope, tag } => {
-            println!("{}", engram_cli::cmd_learn(&db, &rule, &scope, tag)?)
+            println!("{}", recall_cli::cmd_learn(&db, &rule, &scope, tag)?)
         }
-        Cmd::List => println!("{}", engram_cli::cmd_list(&db)?),
-        Cmd::Why { id } => println!("{}", engram_cli::cmd_why(&db, &id)?),
-        Cmd::Forget { id } => println!("{}", engram_cli::cmd_forget(&db, &id)?),
-        Cmd::Status => println!("{}", engram_cli::cmd_status(&db)?),
+        Cmd::List => println!("{}", recall_cli::cmd_list(&db)?),
+        Cmd::Why { id } => println!("{}", recall_cli::cmd_why(&db, &id)?),
+        Cmd::Forget { id } => println!("{}", recall_cli::cmd_forget(&db, &id)?),
+        Cmd::Status => println!("{}", recall_cli::cmd_status(&db)?),
     }
     Ok(())
 }
@@ -1528,31 +1528,31 @@ async fn main() -> Result<()> {
 - [ ] **Step 8: Commit**
 
 ```bash
-git add Cargo.toml crates/engram-cli
-git commit -m "feat(cli): engram binary + learn/list commands and subcommand wiring
+git add Cargo.toml crates/recall-cli
+git commit -m "feat(cli): recall binary + learn/list commands and subcommand wiring
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
 
 ---
 
-### Task 9: `engram-cli` — `why`, `forget`, `status`
+### Task 9: `recall-cli` — `why`, `forget`, `status`
 
 **Files:**
-- Modify: `crates/engram-cli/src/lib.rs` (add three functions + a prefix resolver)
-- Test: extend the `#[cfg(test)]` block in `crates/engram-cli/src/lib.rs`
+- Modify: `crates/recall-cli/src/lib.rs` (add three functions + a prefix resolver)
+- Test: extend the `#[cfg(test)]` block in `crates/recall-cli/src/lib.rs`
 
 **Interfaces:**
 - Produces: `cmd_why(db: &Path, id_prefix: &str) -> Result<String>`; `cmd_forget(db: &Path, id_prefix: &str) -> Result<String>`; `cmd_status(db: &Path) -> Result<String>`.
 - Consumes: `Store`, `Convention`, `scope_label`, `Source`.
 
-- [ ] **Step 1: Add the failing tests to the `#[cfg(test)]` block in `crates/engram-cli/src/lib.rs`**
+- [ ] **Step 1: Add the failing tests to the `#[cfg(test)]` block in `crates/recall-cli/src/lib.rs`**
 
 ```rust
     #[test]
     fn why_and_forget_by_prefix() {
         let tmp = tempfile::tempdir().unwrap();
-        let db = tmp.path().join("engram.db");
+        let db = tmp.path().join("recall.db");
         let msg = cmd_learn(&db, "Use early returns", "global", vec![]).unwrap();
         // extract the 8-char id from "Learned [xxxxxxxx]: ..."
         let id = &msg[msg.find('[').unwrap() + 1..msg.find(']').unwrap()];
@@ -1569,7 +1569,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
     #[test]
     fn status_reports_counts() {
         let tmp = tempfile::tempdir().unwrap();
-        let db = tmp.path().join("engram.db");
+        let db = tmp.path().join("recall.db");
         cmd_learn(&db, "Use early returns", "global", vec![]).unwrap();
         let status = cmd_status(&db).unwrap();
         assert!(status.contains("1"));
@@ -1579,10 +1579,10 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `cargo test -p engram-cli`
+Run: `cargo test -p recall-cli`
 Expected: FAIL — `cannot find function cmd_why`.
 
-- [ ] **Step 3: Add the implementations to `crates/engram-cli/src/lib.rs`** (place above the test block, after `cmd_list`)
+- [ ] **Step 3: Add the implementations to `crates/recall-cli/src/lib.rs`** (place above the test block, after `cmd_list`)
 
 ```rust
 fn find_by_prefix(store: &Store, prefix: &str) -> Result<Convention> {
@@ -1634,7 +1634,7 @@ pub fn cmd_status(db: &Path) -> Result<String> {
     let active = store.active()?.len();
     let total = store.all()?.len();
     Ok(format!(
-        "Engram\n  db:       {}\n  active:   {active}\n  total:    {total}\n  provider: not configured (LLM capture arrives in Plan 2)",
+        "Recall\n  db:       {}\n  active:   {active}\n  total:    {total}\n  provider: not configured (LLM capture arrives in Plan 2)",
         db.display()
     ))
 }
@@ -1642,18 +1642,18 @@ pub fn cmd_status(db: &Path) -> Result<String> {
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
-Run: `cargo test -p engram-cli`
+Run: `cargo test -p recall-cli`
 Expected: PASS (5 tests).
 
 - [ ] **Step 5: Build the binary end-to-end**
 
-Run: `cargo build && ./target/debug/engram --help`
+Run: `cargo build && ./target/debug/recall --help`
 Expected: help text listing `mcp, learn, list, why, forget, status`.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add crates/engram-cli
+git add crates/recall-cli
 git commit -m "feat(cli): why/forget/status commands with id-prefix resolution
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -1665,11 +1665,11 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 **Files:**
 - Create: `.mcp.json` (dev MCP config pointing at the debug binary)
-- Create: `docs/DEV.md` (how to dogfood Engram on your own session)
+- Create: `docs/DEV.md` (how to dogfood Recall on your own session)
 - Modify: `.gitignore` (ignore `/target`)
 
 **Interfaces:**
-- Consumes: the `engram` binary from Task 9.
+- Consumes: the `recall` binary from Task 9.
 
 - [ ] **Step 1: Create `.gitignore`**
 
@@ -1682,8 +1682,8 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```json
 {
   "mcpServers": {
-    "engram": {
-      "command": "./target/debug/engram",
+    "recall": {
+      "command": "./target/debug/recall",
       "args": ["mcp"]
     }
   }
@@ -1693,9 +1693,9 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - [ ] **Step 3: Create `docs/DEV.md`**
 
 ````markdown
-# Developing Engram by dogfooding it
+# Developing Recall by dogfooding it
 
-Engram is built by using Engram. Once the binary builds, register the local
+Recall is built by using Recall. Once the binary builds, register the local
 debug build as an MCP server on your own Claude Code / Codex session and call
 its tools live.
 
@@ -1707,35 +1707,35 @@ cargo build
 
 ## Register on Claude Code (project scope)
 
-The repo ships a dev `.mcp.json` pointing at `./target/debug/engram mcp`.
+The repo ships a dev `.mcp.json` pointing at `./target/debug/recall mcp`.
 From the repo root:
 
 ```bash
-claude mcp add engram -- ./target/debug/engram mcp
+claude mcp add recall -- ./target/debug/recall mcp
 # or rely on the project-scoped .mcp.json and approve it when prompted
 ```
 
-Then in a session: call the `engram_conventions` and `engram_list` tools.
+Then in a session: call the `recall_conventions` and `recall_list` tools.
 
 ## Teach + verify loop
 
 ```bash
-# teach a convention (uses ~/.engram/engram.db by default)
-./target/debug/engram learn "Import directly; no barrel files" --scope global
+# teach a convention (uses ~/.recall/recall.db by default)
+./target/debug/recall learn "Import directly; no barrel files" --scope global
 
 # confirm it's stored
-./target/debug/engram list
+./target/debug/recall list
 
 # the MCP tool should now return it
-#   engram_conventions  -> includes the rule
-#   engram_list         -> includes the rule
+#   recall_conventions  -> includes the rule
+#   recall_list         -> includes the rule
 ```
 
 Use a throwaway DB while experimenting:
 
 ```bash
-ENGRAM_DB=/tmp/engram-dev.db ./target/debug/engram learn "..." 
-ENGRAM_DB=/tmp/engram-dev.db ./target/debug/engram list
+RECALL_DB=/tmp/recall-dev.db ./target/debug/recall learn "..." 
+RECALL_DB=/tmp/recall-dev.db ./target/debug/recall list
 ```
 ````
 
@@ -1745,12 +1745,12 @@ Run each and confirm:
 
 ```bash
 cargo build
-ENGRAM_DB=/tmp/engram-smoke.db ./target/debug/engram learn "Use early returns" --scope global
-ENGRAM_DB=/tmp/engram-smoke.db ./target/debug/engram list          # shows the rule + id
-ENGRAM_DB=/tmp/engram-smoke.db ./target/debug/engram status        # active: 1
+RECALL_DB=/tmp/recall-smoke.db ./target/debug/recall learn "Use early returns" --scope global
+RECALL_DB=/tmp/recall-smoke.db ./target/debug/recall list          # shows the rule + id
+RECALL_DB=/tmp/recall-smoke.db ./target/debug/recall status        # active: 1
 # echo a minimal MCP initialize/list to confirm the server starts (optional):
 echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"smoke","version":"0"}}}' \
-  | ENGRAM_DB=/tmp/engram-smoke.db ./target/debug/engram mcp
+  | RECALL_DB=/tmp/recall-smoke.db ./target/debug/recall mcp
 ```
 Expected: the `learn`/`list`/`status` outputs are correct; the `mcp` process reads stdin and responds with a JSON-RPC `initialize` result on stdout (Ctrl-C to exit).
 
@@ -1778,7 +1778,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - SQLite store, local-first, single binary (bundled) → Task 4. ✅
 - Markdown export/import — **deferred to a later plan** (not in Plan 1 scope; noted here so it isn't forgotten). ✅ (gap acknowledged, not silent)
 - Inject: select by repo/branch/language, budget cap, render; SessionStart hook wiring → selection/render here (Tasks 5, 6); the *hook* ships in Plan 3 packaging. ✅
-- MCP server (`engram_conventions`, `engram_list`) via rmcp → Task 7. ✅
+- MCP server (`recall_conventions`, `recall_list`) via rmcp → Task 7. ✅
 - CLI inspect/edit (`list/why/forget/learn/status`) → Tasks 8, 9. (`review`/`export`/`import` arrive with Plan 2/later.) ✅
 - Dogfood as local MCP (spec §9.1) → Task 10. ✅
 - LLM provider trait + capture/curate → correctly **out of scope** (Plan 2). ✅
@@ -1791,7 +1791,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ## Execution Handoff
 
-Plan complete and saved to `docs/superpowers/plans/2026-06-28-engram-core-mcp.md`. Two execution options:
+Plan complete and saved to `docs/superpowers/plans/2026-06-28-recall-core-mcp.md`. Two execution options:
 
 **1. Subagent-Driven (recommended)** — I dispatch a fresh subagent per task, review between tasks, fast iteration.
 

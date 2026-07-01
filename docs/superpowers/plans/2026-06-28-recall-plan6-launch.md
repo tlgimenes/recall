@@ -1,10 +1,10 @@
-# Engram Plan 6 — Launch
+# Recall Plan 6 — Launch
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans. Tasks 1–3 are concrete deliverables (TDD-style verification where it applies); Tasks 4–6 are an operational launch checklist to run with the maintainer, not autonomous code.
 
 **Goal:** Convert a working product into GitHub stars — a landing-page README with a demo GIF, listings everywhere developers discover tools, and a single coordinated 48-hour launch that clears GitHub Trending velocity.
 
-**Architecture:** The README is the conversion surface (problem-first one-liner → demo GIF → one-command install → the cross-agent story). A VHS tape regenerates the demo GIF in CI so it never goes stale. Directory listings (MCP Registry, Anthropic plugin directory, awesome-lists) are seeded before launch day so the launch traffic finds Engram everywhere. The launch fires all channels in one window.
+**Architecture:** The README is the conversion surface (problem-first one-liner → demo GIF → one-command install → the cross-agent story). A VHS tape regenerates the demo GIF in CI so it never goes stale. Directory listings (MCP Registry, Anthropic plugin directory, awesome-lists) are seeded before launch day so the launch traffic finds Recall everywhere. The launch fires all channels in one window.
 
 ## Global Constraints
 
@@ -25,24 +25,24 @@
 ```markdown
 <div align="center">
 
-# 🧠 Engram
+# 🧠 Recall
 
 ### Teach your AI once. It writes code like you — in every repo, every branch, every agent.
 
-[![CI](https://github.com/tlgimenes/engram/actions/workflows/ci.yml/badge.svg)](https://github.com/tlgimenes/engram/actions/workflows/ci.yml)
+[![CI](https://github.com/tlgimenes/recall/actions/workflows/ci.yml/badge.svg)](https://github.com/tlgimenes/recall/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-[Install](#install) · [How it works](#how-it-works) · [Why Engram](#why-engram)
+[Install](#install) · [How it works](#how-it-works) · [Why Recall](#why-recall)
 
-![Engram demo](docs/assets/demo.gif)
+![Recall demo](docs/assets/demo.gif)
 
 </div>
 
 ---
 
-**Engram is a personal coding-convention brain for AI agents.** Correct your AI
+**Recall is a personal coding-convention brain for AI agents.** Correct your AI
 once — "stop using barrel files", "always early-return", "we use snake_case here"
-— and Engram remembers it and applies it in **every repo, every branch, and every
+— and Recall remembers it and applies it in **every repo, every branch, and every
 agent**. Claude Code, Codex, and beyond.
 
 It's local-first, a single fast Rust binary, and it uses the agent you already
@@ -57,8 +57,8 @@ stale, cost tokens forever, and don't travel across tools.
 ## How it works
 
 1. **Correct it once.** Tell any agent how you like things — or just work, and
-   Engram distills your conventions from the session.
-2. **Engram remembers.** Curated, compact rules scoped to you, a language, a repo,
+   Recall distills your conventions from the session.
+2. **Recall remembers.** Curated, compact rules scoped to you, a language, a repo,
    or a branch. Stale rules are superseded, never piled up.
 3. **Applied everywhere.** Every new session in every repo and every agent starts
    already knowing your conventions.
@@ -67,25 +67,25 @@ stale, cost tokens forever, and don't travel across tools.
 
 **Claude Code**
 ```
-/plugin marketplace add tlgimenes/engram
-/plugin install engram@engram
+/plugin marketplace add tlgimenes/recall
+/plugin install recall@recall
 ```
 
 **Codex**
 ```
-codex plugin marketplace add tlgimenes/engram
+codex plugin marketplace add tlgimenes/recall
 ```
-then install Engram from `codex /plugins`.
+then install Recall from `codex /plugins`.
 
 **Or the CLI directly**
 ```bash
-npx -y @tlgimenes/engram            # run / try it
-brew install tlgimenes/engram/engram
+npx -y @tlgimenes/recall            # run / try it
+brew install tlgimenes/recall/recall
 ```
 
-## Why Engram
+## Why Recall
 
-| | Engram | Static CLAUDE.md | Other memory tools |
+| | Recall | Static CLAUDE.md | Other memory tools |
 |---|:---:|:---:|:---:|
 | Personal, cross-repo | ✅ | ❌ | partial |
 | Cross-branch | ✅ | ❌ | ❌ |
@@ -98,14 +98,14 @@ brew install tlgimenes/engram/engram
 ## Inspect everything
 
 ```bash
-engram list           # what Engram knows
-engram why <id>       # where it learned a rule
-engram forget <id>    # retire one
+recall list           # what Recall knows
+recall why <id>       # where it learned a rule
+recall forget <id>    # retire one
 ```
 
 ## How it learns without a separate model
 
-Engram drives your installed Claude Code / Codex (`claude -p` / `codex exec`) for
+Recall drives your installed Claude Code / Codex (`claude -p` / `codex exec`) for
 the small distillation tasks — so inference uses the subscription you already
 have. Bring an API key instead if you prefer. Conventions never leave your machine
 except to your own chosen provider.
@@ -117,7 +117,7 @@ MIT.
 
 - [ ] **Step 2: Verify links + that install commands match the shipped names**
 
-Run: `grep -n "@tlgimenes/engram\|tlgimenes/engram/engram\|engram@engram" README.md`
+Run: `grep -n "@tlgimenes/recall\|tlgimenes/recall/recall\|recall@recall" README.md`
 Expected: matches Plan 3/4 names exactly. (The `docs/assets/demo.gif` is produced in Task 2.)
 
 - [ ] **Step 3: Commit**
@@ -141,7 +141,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - [ ] **Step 1: Create `docs/demo.tape`** (the cross-agent story as a terminal recording)
 
 ```tape
-# Engram demo — render with: vhs docs/demo.tape
+# Recall demo — render with: vhs docs/demo.tape
 Output docs/assets/demo.gif
 Set FontSize 18
 Set Width 1100
@@ -153,7 +153,7 @@ Type "# repo: acme/api · Claude Code" Enter
 Sleep 600ms
 Type "you: stop creating barrel files — import directly" Enter
 Sleep 800ms
-Type "engram ✓ learned: \"Import directly; no barrel files\" (global)" Enter
+Type "recall ✓ learned: \"Import directly; no barrel files\" (global)" Enter
 Sleep 1s
 Type "" Enter
 Type "# a week later · repo: acme/web · Codex" Enter
@@ -230,7 +230,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - [ ] **Step 2: Set repo description + topics** (manual / `gh`)
 
 ```bash
-gh repo edit tlgimenes/engram \
+gh repo edit tlgimenes/recall \
   --description "Teach your AI once — it writes code like you in every repo and every agent. A local-first coding-convention brain for Claude Code & Codex." \
   --add-topic mcp --add-topic claude-code --add-topic codex --add-topic ai-agents \
   --add-topic developer-tools --add-topic rust --add-topic memory
@@ -251,13 +251,13 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 Checklist — complete and verify each (no code):
 
-- [ ] **MCP Registry** — submit the Engram MCP server to `registry.modelcontextprotocol.io` (server.json per their schema). Confirm it appears.
+- [ ] **MCP Registry** — submit the Recall MCP server to `registry.modelcontextprotocol.io` (server.json per their schema). Confirm it appears.
 - [ ] **Anthropic plugin directory** — submit the Claude Code plugin (claude.ai/admin-settings/directory or platform.claude.com/plugins/submit). Inclusion has driven thousands of stars for comparable plugins.
-- [ ] **`awesome-claude-code`** — open a PR adding Engram.
-- [ ] **`awesome-mcp-servers`** — open a PR adding Engram.
+- [ ] **`awesome-claude-code`** — open a PR adding Recall.
+- [ ] **`awesome-mcp-servers`** — open a PR adding Recall.
 - [ ] **PulseMCP / Smithery** — list the server.
 - [ ] **Codex plugin directory** — submit per OpenAI's process when available.
-- [ ] Confirm the **GitHub Pages site** is live (`tlgimenes.github.io/engram` or custom domain) and the README demo GIF renders.
+- [ ] Confirm the **GitHub Pages site** is live (`tlgimenes.github.io/recall` or custom domain) and the README demo GIF renders.
 
 ---
 
@@ -265,7 +265,7 @@ Checklist — complete and verify each (no code):
 
 Run all in one window (Tue–Thu, ~9am ET / 13:00 UTC). The goal is to clear GitHub Trending's ~200★/day velocity so Trending compounds the rest.
 
-- [ ] **Hacker News (Show HN)** — title like "Show HN: Engram – teach your AI once, it codes like you in every repo and agent". Post early in the window; **be present in comments all day** (comments matter more than upvotes).
+- [ ] **Hacker News (Show HN)** — title like "Show HN: Recall – teach your AI once, it codes like you in every repo and agent". Post early in the window; **be present in comments all day** (comments matter more than upvotes).
 - [ ] **Reddit** — r/LocalLLaMA, r/commandline, r/rust, r/ChatGPTCoding. Lead with the problem; respect each sub's self-promo rules; one post each, native framing.
 - [ ] **X/Twitter** — a thread with the 20-second demo GIF and the cross-agent "wow". Tag/notify relevant builders. Ask for honest feedback, not stars.
 - [ ] **Console.dev** — submit (high-intent dev-tool newsletter; editorial features are free).
@@ -278,8 +278,8 @@ Run all in one window (Tue–Thu, ~9am ET / 13:00 UTC). The goal is to clear Git
 
 - [ ] Respond to every HN/Reddit/issue comment within the first 48h; convert bug reports into quick fixes + a visible changelog.
 - [ ] Track the truer signals (npm downloads, plugin installs, contributor retention), not just stars.
-- [ ] Ship the **enforcement fast-follow** (Plan FF) as a second beat ("Engram now *blocks* edits that break your conventions") — a fresh, datable re-spike.
-- [ ] Add a recurring re-spike hook: a shareable `engram export` "convention pack", or a public gallery of community packs.
+- [ ] Ship the **enforcement fast-follow** (Plan FF) as a second beat ("Recall now *blocks* edits that break your conventions") — a fresh, datable re-spike.
+- [ ] Add a recurring re-spike hook: a shareable `recall export` "convention pack", or a public gallery of community packs.
 - [ ] Write a short build-log blog post ("how we use Claude Code/Codex as a free local LLM provider") — compounding search tail + a second HN shot.
 
 ---
@@ -302,4 +302,4 @@ Run all in one window (Tue–Thu, ~9am ET / 13:00 UTC). The goal is to clear Git
 
 ## Execution Handoff
 
-Plan complete and saved to `docs/superpowers/plans/2026-06-28-engram-plan6-launch.md`. Run Tasks 1–3 once Plans 1–5 are green and a release exists; run Tasks 4–6 with the maintainer for the actual launch.
+Plan complete and saved to `docs/superpowers/plans/2026-06-28-recall-plan6-launch.md`. Run Tasks 1–3 once Plans 1–5 are green and a release exists; run Tasks 4–6 with the maintainer for the actual launch.

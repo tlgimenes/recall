@@ -1,19 +1,19 @@
-# Engram Plan 2 — `agent-cli` bindings + LLM capture/curate
+# Recall Plan 2 — `agent-cli` bindings + LLM capture/curate
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Learn conventions automatically — a standalone `agent-cli` crate that drives the user's installed `claude`/`codex` (or an API key) as an LLM backend, and an `engram-capture` pipeline that distills session transcripts into curated, deduped, supersession-aware conventions, surfaced through `engram capture` / `engram review`.
+**Goal:** Learn conventions automatically — a standalone `agent-cli` crate that drives the user's installed `claude`/`codex` (or an API key) as an LLM backend, and an `recall-capture` pipeline that distills session transcripts into curated, deduped, supersession-aware conventions, surfaced through `recall capture` / `recall review`.
 
-**Architecture:** `agent-cli` exposes an `AgentProvider` trait with three backends (Claude subprocess, Codex subprocess, Anthropic API key), each split into **pure arg-builders + output-parsers** (unit-tested) and a thin async spawn/send. `engram-capture` builds a JSON-schema extraction prompt, runs it through a provider, parses `Candidate`s, and curates them into the store (lexical dedup + provider-judged supersession). The CLI adds `capture` (hook entrypoint) and `review` (promote/reject Pending).
+**Architecture:** `agent-cli` exposes an `AgentProvider` trait with three backends (Claude subprocess, Codex subprocess, Anthropic API key), each split into **pure arg-builders + output-parsers** (unit-tested) and a thin async spawn/send. `recall-capture` builds a JSON-schema extraction prompt, runs it through a provider, parses `Candidate`s, and curates them into the store (lexical dedup + provider-judged supersession). The CLI adds `capture` (hook entrypoint) and `review` (promote/reject Pending).
 
-**Tech Stack:** `tokio` (process + async), `async-trait`, `serde_json`, `which`, `reqwest` (rustls) for the API-key backend; `engram-core`/`engram-store` from Plans 0–1.
+**Tech Stack:** `tokio` (process + async), `async-trait`, `serde_json`, `which`, `reqwest` (rustls) for the API-key backend; `recall-core`/`recall-store` from Plans 0–1.
 
 ## Global Constraints
 
 - **Only spawn the genuine `claude`/`codex` binaries.** Never extract OAuth tokens; never use an Agent SDK with subscription OAuth. (Anthropic forbids both.)
 - **Bounded calls:** single turn, no tools, hard timeout, validated JSON output, retry once on malformed. Scrub `ANTHROPIC_API_KEY` from the child env for subscription-backed Claude runs unless the API-key backend is explicitly selected.
 - **Privacy:** transcripts are read locally and sent only to the user's chosen provider. Capture is opt-outable and never transmits anywhere else.
-- **`engram-llm` from the architecture spec is realized as:** the reusable `agent-cli` crate (provider) + the Engram-specific prompt/schema living in `engram-capture`. No separate `engram-llm` crate.
+- **`recall-llm` from the architecture spec is realized as:** the reusable `agent-cli` crate (provider) + the Recall-specific prompt/schema living in `recall-capture`. No separate `recall-llm` crate.
 - **Pure/impure split:** arg-building and output-parsing are pure functions with unit tests; real-CLI/network calls live behind `#[ignore]` integration tests.
 - **Commit style:** end every commit body with `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`.
 
@@ -740,26 +740,26 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ---
 
-### Task 5: `engram-capture` — extraction (transcript → candidates)
+### Task 5: `recall-capture` — extraction (transcript → candidates)
 
 **Files:**
-- Create: `crates/engram-capture/Cargo.toml`
-- Create: `crates/engram-capture/src/lib.rs`
-- Create: `crates/engram-capture/src/extract.rs`
-- Test: inline in `crates/engram-capture/src/extract.rs`
+- Create: `crates/recall-capture/Cargo.toml`
+- Create: `crates/recall-capture/src/lib.rs`
+- Create: `crates/recall-capture/src/extract.rs`
+- Test: inline in `crates/recall-capture/src/extract.rs`
 
 **Interfaces:**
-- Produces: `engram_capture::{Candidate, ScopeHint, extraction_schema, extraction_prompt, parse_candidates, extract}`.
+- Produces: `recall_capture::{Candidate, ScopeHint, extraction_schema, extraction_prompt, parse_candidates, extract}`.
   - `struct Candidate { rule: String, scope_hint: ScopeHint, tags: Vec<String>, rationale: Option<String>, excerpt: Option<String> }`
   - `enum ScopeHint { Global, Language(String), Repo, Branch }`
   - `async fn extract(transcript: &str, provider: &dyn AgentProvider) -> Result<Vec<Candidate>>`
 - Consumes: `agent_cli::AgentProvider`.
 
-- [ ] **Step 1: Create `crates/engram-capture/Cargo.toml`**
+- [ ] **Step 1: Create `crates/recall-capture/Cargo.toml`**
 
 ```toml
 [package]
-name = "engram-capture"
+name = "recall-capture"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
@@ -767,8 +767,8 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-engram-core = { path = "../engram-core" }
-engram-store = { path = "../engram-store" }
+recall-core = { path = "../recall-core" }
+recall-store = { path = "../recall-store" }
 agent-cli = { path = "../agent-cli" }
 anyhow = { workspace = true }
 serde = { workspace = true }
@@ -780,7 +780,7 @@ uuid = { workspace = true }
 tokio = { workspace = true }
 ```
 
-- [ ] **Step 2: Write the failing tests in `crates/engram-capture/src/extract.rs`**
+- [ ] **Step 2: Write the failing tests in `crates/recall-capture/src/extract.rs`**
 
 ```rust
 #[cfg(test)]
@@ -822,17 +822,17 @@ mod tests {
 
 - [ ] **Step 3: Run the tests to verify they fail**
 
-Run: `cargo test -p engram-capture`
+Run: `cargo test -p recall-capture`
 Expected: FAIL — `cannot find ... ScopeHint`.
 
-- [ ] **Step 4: Write `crates/engram-capture/src/lib.rs`**
+- [ ] **Step 4: Write `crates/recall-capture/src/lib.rs`**
 
 ```rust
 mod extract;
 pub use extract::*;
 ```
 
-- [ ] **Step 5: Write the implementation at the top of `crates/engram-capture/src/extract.rs`**
+- [ ] **Step 5: Write the implementation at the top of `crates/recall-capture/src/extract.rs`**
 
 ```rust
 use agent_cli::AgentProvider;
@@ -931,13 +931,13 @@ pub async fn extract(transcript: &str, provider: &dyn AgentProvider) -> Result<V
 
 - [ ] **Step 6: Run the tests to verify they pass**
 
-Run: `cargo test -p engram-capture`
+Run: `cargo test -p recall-capture`
 Expected: PASS (3 tests).
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add crates/engram-capture
+git add crates/recall-capture
 git commit -m "feat(capture): session transcript -> convention candidates via provider
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -945,18 +945,18 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ---
 
-### Task 6: `engram-capture` — curation (candidates → store, with supersession)
+### Task 6: `recall-capture` — curation (candidates → store, with supersession)
 
 **Files:**
-- Create: `crates/engram-capture/src/curate.rs`
-- Modify: `crates/engram-capture/src/lib.rs` (add `mod curate; pub use curate::*;`)
-- Test: inline in `crates/engram-capture/src/curate.rs`
+- Create: `crates/recall-capture/src/curate.rs`
+- Modify: `crates/recall-capture/src/lib.rs` (add `mod curate; pub use curate::*;`)
+- Test: inline in `crates/recall-capture/src/curate.rs`
 
 **Interfaces:**
 - Produces: `candidate_to_convention(c: &Candidate, ctx: &RepoContext, now: DateTime<Utc>) -> Convention` (status `Pending`); `async fn curate(cands: &[Candidate], store: &Store, ctx: &RepoContext, provider: &dyn AgentProvider) -> Result<CurationReport>`; `struct CurationReport { added: Vec<Uuid>, corroborated: Vec<Uuid>, conflicts: Vec<(Uuid, Uuid)> }`.
-- Consumes: `engram_core` (`Convention`, `RepoContext`, `dedup_decision`, `normalize_rule`), `engram_store::Store`, `agent_cli::AgentProvider`.
+- Consumes: `recall_core` (`Convention`, `RepoContext`, `dedup_decision`, `normalize_rule`), `recall_store::Store`, `agent_cli::AgentProvider`.
 
-- [ ] **Step 1: Write the failing tests in `crates/engram-capture/src/curate.rs`**
+- [ ] **Step 1: Write the failing tests in `crates/recall-capture/src/curate.rs`**
 
 ```rust
 #[cfg(test)]
@@ -964,8 +964,8 @@ mod tests {
     use super::*;
     use crate::{Candidate, ScopeHint};
     use agent_cli::MockProvider;
-    use engram_core::*;
-    use engram_store::Store;
+    use recall_core::*;
+    use recall_store::Store;
     use chrono::Utc;
     use serde_json::json;
 
@@ -1008,10 +1008,10 @@ mod tests {
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `cargo test -p engram-capture curate`
+Run: `cargo test -p recall-capture curate`
 Expected: FAIL — `cannot find function candidate_to_convention`.
 
-- [ ] **Step 3: Add module wiring to `crates/engram-capture/src/lib.rs`**
+- [ ] **Step 3: Add module wiring to `crates/recall-capture/src/lib.rs`**
 
 ```rust
 mod curate;
@@ -1020,15 +1020,15 @@ pub use curate::*;
 pub use extract::*;
 ```
 
-- [ ] **Step 4: Write the implementation at the top of `crates/engram-capture/src/curate.rs`**
+- [ ] **Step 4: Write the implementation at the top of `crates/recall-capture/src/curate.rs`**
 
 ```rust
 use crate::{Candidate, ScopeHint};
 use agent_cli::AgentProvider;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use engram_core::{dedup_decision, Convention, DedupDecision, Provenance, RepoContext, Scope, Source, Status};
-use engram_store::Store;
+use recall_core::{dedup_decision, Convention, DedupDecision, Provenance, RepoContext, Scope, Source, Status};
+use recall_store::Store;
 use serde_json::json;
 use uuid::Uuid;
 
@@ -1128,13 +1128,13 @@ pub async fn curate(
 
 - [ ] **Step 5: Run the tests to verify they pass**
 
-Run: `cargo test -p engram-capture`
+Run: `cargo test -p recall-capture`
 Expected: PASS (5 tests).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add crates/engram-capture
+git add crates/recall-capture
 git commit -m "feat(capture): curate candidates into Pending conventions, detect conflicts
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -1145,22 +1145,22 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ### Task 7: CLI — `capture`, `review`, and provider-aware `status`
 
 **Files:**
-- Modify: `crates/engram-cli/Cargo.toml` (add `engram-capture`, `agent-cli` deps)
-- Modify: `crates/engram-cli/src/lib.rs` (add `cmd_capture`, `cmd_review_list`, `cmd_review_accept`, `cmd_review_reject`; update `cmd_status`)
-- Modify: `crates/engram-cli/src/main.rs` (add `Capture`, `Review` subcommands)
-- Test: extend the `#[cfg(test)]` block in `crates/engram-cli/src/lib.rs`
+- Modify: `crates/recall-cli/Cargo.toml` (add `recall-capture`, `agent-cli` deps)
+- Modify: `crates/recall-cli/src/lib.rs` (add `cmd_capture`, `cmd_review_list`, `cmd_review_accept`, `cmd_review_reject`; update `cmd_status`)
+- Modify: `crates/recall-cli/src/main.rs` (add `Capture`, `Review` subcommands)
+- Test: extend the `#[cfg(test)]` block in `crates/recall-cli/src/lib.rs`
 
 **Interfaces:**
 - Produces: `cmd_capture(db, transcript_path, ctx, provider) -> Result<String>`; `cmd_review_list(db) -> Result<String>`; `cmd_review_accept(db, id_prefix) -> Result<String>` (Pending→Active; if it had a conflict, retire the conflicting active one as Superseded); `cmd_review_reject(db, id_prefix) -> Result<String>`.
 
-- [ ] **Step 1: Add deps to `crates/engram-cli/Cargo.toml`**
+- [ ] **Step 1: Add deps to `crates/recall-cli/Cargo.toml`**
 
 ```toml
-engram-capture = { path = "../engram-capture" }
+recall-capture = { path = "../recall-capture" }
 agent-cli = { path = "../agent-cli" }
 ```
 
-- [ ] **Step 2: Write the failing tests in the `#[cfg(test)]` block of `crates/engram-cli/src/lib.rs`**
+- [ ] **Step 2: Write the failing tests in the `#[cfg(test)]` block of `crates/recall-cli/src/lib.rs`**
 
 ```rust
     #[tokio::test]
@@ -1168,14 +1168,14 @@ agent-cli = { path = "../agent-cli" }
         use agent_cli::MockProvider;
         use serde_json::json;
         let tmp = tempfile::tempdir().unwrap();
-        let db = tmp.path().join("engram.db");
+        let db = tmp.path().join("recall.db");
         let transcript = tmp.path().join("t.txt");
         std::fs::write(&transcript, "user: always use early returns").unwrap();
 
         let extractor = MockProvider::new(json!({"conventions":[
             {"rule":"Use early returns","scope":"global","tags":[]}
         ]}));
-        let ctx = engram_core::RepoContext::default();
+        let ctx = recall_core::RepoContext::default();
         let msg = cmd_capture(&db, &transcript, &ctx, &extractor).await.unwrap();
         assert!(msg.to_lowercase().contains("1"));
 
@@ -1193,11 +1193,11 @@ agent-cli = { path = "../agent-cli" }
         use agent_cli::MockProvider;
         use serde_json::json;
         let tmp = tempfile::tempdir().unwrap();
-        let db = tmp.path().join("engram.db");
+        let db = tmp.path().join("recall.db");
         let transcript = tmp.path().join("t.txt");
         std::fs::write(&transcript, "x").unwrap();
         let extractor = MockProvider::new(json!({"conventions":[{"rule":"Nope","scope":"global","tags":[]}]}));
-        cmd_capture(&db, &transcript, &engram_core::RepoContext::default(), &extractor).await.unwrap();
+        cmd_capture(&db, &transcript, &recall_core::RepoContext::default(), &extractor).await.unwrap();
         let pending = cmd_review_list(&db).unwrap();
         let id = &pending[pending.find('[').unwrap() + 1..pending.find(']').unwrap()];
         cmd_review_reject(&db, id).unwrap();
@@ -1207,15 +1207,15 @@ agent-cli = { path = "../agent-cli" }
 
 - [ ] **Step 3: Run the tests to verify they fail**
 
-Run: `cargo test -p engram-cli`
+Run: `cargo test -p recall-cli`
 Expected: FAIL — `cannot find function cmd_capture`.
 
-- [ ] **Step 4: Add the implementations to `crates/engram-cli/src/lib.rs`** (above the test block)
+- [ ] **Step 4: Add the implementations to `crates/recall-cli/src/lib.rs`** (above the test block)
 
 ```rust
 use agent_cli::AgentProvider;
-use engram_capture::{curate, extract};
-use engram_core::{RepoContext, Status};
+use recall_capture::{curate, extract};
+use recall_core::{RepoContext, Status};
 
 pub async fn cmd_capture(
     db: &Path,
@@ -1242,7 +1242,7 @@ pub fn cmd_review_list(db: &Path) -> Result<String> {
     if pending.is_empty() {
         return Ok("No pending conventions to review.".to_string());
     }
-    let mut s = String::from("Pending review (engram review --accept <id> | --reject <id>):\n");
+    let mut s = String::from("Pending review (recall review --accept <id> | --reject <id>):\n");
     for c in &pending {
         s.push_str(&format!("[{}] {} ({})\n", short(&c.id), c.rule, scope_label(&c.scope)));
     }
@@ -1253,9 +1253,9 @@ pub fn cmd_review_accept(db: &Path, id_prefix: &str) -> Result<String> {
     let store = Store::open(db)?;
     let mut c = find_by_prefix(&store, id_prefix)?;
     // Retire any same-scope active rule with a different normalized text (supersession).
-    let n = engram_core::normalize_rule(&c.rule);
+    let n = recall_core::normalize_rule(&c.rule);
     for e in store.active()? {
-        if e.scope == c.scope && engram_core::normalize_rule(&e.rule) != n {
+        if e.scope == c.scope && recall_core::normalize_rule(&e.rule) != n {
             let mut sup = e.clone();
             sup.status = Status::Superseded;
             sup.superseded_by = Some(c.id);
@@ -1287,7 +1287,7 @@ pub fn cmd_review_reject(db: &Path, id_prefix: &str) -> Result<String> {
 > ```
 > and include `provider` in the formatted output.
 
-- [ ] **Step 5: Wire new subcommands in `crates/engram-cli/src/main.rs`**
+- [ ] **Step 5: Wire new subcommands in `crates/recall-cli/src/main.rs`**
 
 Add to the `Cmd` enum:
 
@@ -1314,37 +1314,37 @@ Add to the `match cli.cmd` block:
         Cmd::Capture { transcript } => {
             let provider = agent_cli::detect()
                 .ok_or_else(|| anyhow::anyhow!("no LLM provider; install Claude Code or Codex"))?;
-            let ctx = engram_inject::detect_context(&std::env::current_dir()?);
+            let ctx = recall_inject::detect_context(&std::env::current_dir()?);
             println!(
                 "{}",
-                engram_cli::cmd_capture(&db, std::path::Path::new(&transcript), &ctx, provider.as_ref()).await?
+                recall_cli::cmd_capture(&db, std::path::Path::new(&transcript), &ctx, provider.as_ref()).await?
             );
         }
         Cmd::Review { accept, reject } => {
             if let Some(id) = accept {
-                println!("{}", engram_cli::cmd_review_accept(&db, &id)?);
+                println!("{}", recall_cli::cmd_review_accept(&db, &id)?);
             } else if let Some(id) = reject {
-                println!("{}", engram_cli::cmd_review_reject(&db, &id)?);
+                println!("{}", recall_cli::cmd_review_reject(&db, &id)?);
             } else {
-                println!("{}", engram_cli::cmd_review_list(&db)?);
+                println!("{}", recall_cli::cmd_review_list(&db)?);
             }
         }
 ```
 
 - [ ] **Step 6: Run the tests to verify they pass**
 
-Run: `cargo test -p engram-cli`
+Run: `cargo test -p recall-cli`
 Expected: PASS (all CLI tests, including the two new async ones).
 
 - [ ] **Step 7: Build the binary end-to-end**
 
-Run: `cargo build && ./target/debug/engram review`
+Run: `cargo build && ./target/debug/recall review`
 Expected: "No pending conventions to review." (on an empty/default DB).
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add crates/engram-cli
+git add crates/recall-cli
 git commit -m "feat(cli): capture + review commands; provider-aware status
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -1360,16 +1360,16 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - Session distillation (transcript → candidates) → Task 5. ✅
 - Curation: lexical dedup + provider-judged conflict → Pending → Task 6. ✅
 - Supersession applied on accept → Task 7 `cmd_review_accept`. ✅
-- `engram capture` (Stop-hook entrypoint) + `engram review` → Task 7. ✅ (The hook itself is wired in Plan 3.)
+- `recall capture` (Stop-hook entrypoint) + `recall review` → Task 7. ✅ (The hook itself is wired in Plan 3.)
 - Provider disclosure in `status` → Task 7. ✅
 - Auto-promote-by-confidence threshold → **intentionally deferred**: Plan 2 promotes via explicit `review` only; a confidence auto-promote is a small follow-up once real distillation data exists (flagged, not silent).
 
 **Placeholder scan:** No TBD/TODO. Real-CLI output shapes are flagged with `#[ignore]` integration tests + notes (Tasks 2, 3), which is the honest TDD treatment for external-binary behavior.
 
-**Type consistency:** `AgentProvider`/`complete_json` signature is identical across all backends and consumers; `Candidate`/`ScopeHint`/`CurationReport` and the `cmd_*` signatures match between capture and CLI; `dedup_decision`/`normalize_rule`/`Status`/`Scope` reused from `engram-core` exactly as defined in Plan 1.
+**Type consistency:** `AgentProvider`/`complete_json` signature is identical across all backends and consumers; `Candidate`/`ScopeHint`/`CurationReport` and the `cmd_*` signatures match between capture and CLI; `dedup_decision`/`normalize_rule`/`Status`/`Scope` reused from `recall-core` exactly as defined in Plan 1.
 
 ---
 
 ## Execution Handoff
 
-Plan complete and saved to `docs/superpowers/plans/2026-06-28-engram-plan2-agent-cli-capture.md`. Execute via subagent-driven (recommended) or inline, **after** Plans 0 and 1.
+Plan complete and saved to `docs/superpowers/plans/2026-06-28-recall-plan2-agent-cli-capture.md`. Execute via subagent-driven (recommended) or inline, **after** Plans 0 and 1.

@@ -1,40 +1,40 @@
-# Engram Plan FF — Enforcement (PreToolUse gating)
+# Recall Plan FF — Enforcement (PreToolUse gating)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Turn memory into outcomes — an opt-in `PreToolUse` hook that checks a proposed edit against the developer's active conventions and either warns or **blocks** the edit when it violates one. This is the "convert recall into enforcement" feature that no competitor ships.
 
-**Architecture:** A pure `engram-capture::enforce` module builds a check prompt/schema, runs the proposed file content + relevant conventions through the `AgentProvider`, and parses violations. The CLI adds `engram hook pre-tool-use`, which reads the PreToolUse stdin, extracts the proposed change, gets violations, and emits the portable `permissionDecision` payload according to the enforcement mode (`off` | `warn` | `block`, default `warn`). Both plugins register the PreToolUse hook.
+**Architecture:** A pure `recall-capture::enforce` module builds a check prompt/schema, runs the proposed file content + relevant conventions through the `AgentProvider`, and parses violations. The CLI adds `recall hook pre-tool-use`, which reads the PreToolUse stdin, extracts the proposed change, gets violations, and emits the portable `permissionDecision` payload according to the enforcement mode (`off` | `warn` | `block`, default `warn`). Both plugins register the PreToolUse hook.
 
-**Tech Stack:** extends `engram-capture` + `engram-cli` (Plans 2–3); uses the hook `permissionDecision` contract (Claude Code + Codex identical).
+**Tech Stack:** extends `recall-capture` + `recall-cli` (Plans 2–3); uses the hook `permissionDecision` contract (Claude Code + Codex identical).
 
 ## Global Constraints
 
-- **Default is `warn`, not `block`** — blocking is opt-in via `ENGRAM_ENFORCE=block`. Never silently block on first install (bad first impression).
+- **Default is `warn`, not `block`** — blocking is opt-in via `RECALL_ENFORCE=block`. Never silently block on first install (bad first impression).
 - **Latency budget:** the check is one bounded provider call; only run it for edit tools (`Edit`, `Write`, `MultiEdit`, `apply_patch`). Skip everything else (allow immediately). Hard-timeout; on any error, **fail open** (allow) — never wedge the user's session.
 - **Decision payload (portable):** `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"..."}}` to block; `{"hookSpecificOutput":{"hookEventName":"PreToolUse","additionalContext":"..."}}` to warn-and-allow.
 - **Commit style:** end every commit body with `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`.
 
 ---
 
-### Task 1: `engram-capture::enforce` — violation check
+### Task 1: `recall-capture::enforce` — violation check
 
 **Files:**
-- Create: `crates/engram-capture/src/enforce.rs`
-- Modify: `crates/engram-capture/src/lib.rs` (add `mod enforce; pub use enforce::*;`)
-- Test: inline in `crates/engram-capture/src/enforce.rs`
+- Create: `crates/recall-capture/src/enforce.rs`
+- Modify: `crates/recall-capture/src/lib.rs` (add `mod enforce; pub use enforce::*;`)
+- Test: inline in `crates/recall-capture/src/enforce.rs`
 
 **Interfaces:**
 - Produces: `struct Violation { rule: String, explanation: String }`; `check_schema() -> Value`; `check_prompt(content, conventions: &[Convention]) -> String`; `parse_violations(&Value) -> Result<Vec<Violation>>`; `async fn check(content: &str, conventions: &[Convention], provider: &dyn AgentProvider) -> Result<Vec<Violation>>`.
 
-- [ ] **Step 1: Write the failing tests in `crates/engram-capture/src/enforce.rs`**
+- [ ] **Step 1: Write the failing tests in `crates/recall-capture/src/enforce.rs`**
 
 ```rust
 #[cfg(test)]
 mod tests {
     use super::*;
     use agent_cli::MockProvider;
-    use engram_core::*;
+    use recall_core::*;
     use chrono::Utc;
     use serde_json::json;
     use uuid::Uuid;
@@ -75,22 +75,22 @@ mod tests {
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `cargo test -p engram-capture enforce`
+Run: `cargo test -p recall-capture enforce`
 Expected: FAIL — module not found.
 
-- [ ] **Step 3: Add module wiring to `crates/engram-capture/src/lib.rs`**
+- [ ] **Step 3: Add module wiring to `crates/recall-capture/src/lib.rs`**
 
 ```rust
 mod enforce;
 pub use enforce::*;
 ```
 
-- [ ] **Step 4: Write `crates/engram-capture/src/enforce.rs`** (above the test block)
+- [ ] **Step 4: Write `crates/recall-capture/src/enforce.rs`** (above the test block)
 
 ```rust
 use agent_cli::AgentProvider;
 use anyhow::{anyhow, Result};
-use engram_core::Convention;
+use recall_core::Convention;
 use serde_json::{json, Value};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -158,13 +158,13 @@ pub async fn check(
 
 - [ ] **Step 5: Run tests**
 
-Run: `cargo test -p engram-capture`
+Run: `cargo test -p recall-capture`
 Expected: PASS.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add crates/engram-capture
+git add crates/recall-capture
 git commit -m "feat(enforce): provider-backed convention violation check
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -172,17 +172,17 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ---
 
-### Task 2: CLI — `engram hook pre-tool-use` + enforcement mode
+### Task 2: CLI — `recall hook pre-tool-use` + enforcement mode
 
 **Files:**
-- Modify: `crates/engram-cli/src/lib.rs` (add `EnforceMode`, `extract_proposed`, `pre_tool_use_decision`, `cmd_hook_pre_tool_use`)
-- Modify: `crates/engram-cli/src/main.rs` (route `engram hook pre-tool-use`)
-- Test: extend the `#[cfg(test)]` block in `crates/engram-cli/src/lib.rs`
+- Modify: `crates/recall-cli/src/lib.rs` (add `EnforceMode`, `extract_proposed`, `pre_tool_use_decision`, `cmd_hook_pre_tool_use`)
+- Modify: `crates/recall-cli/src/main.rs` (route `recall hook pre-tool-use`)
+- Test: extend the `#[cfg(test)]` block in `crates/recall-cli/src/lib.rs`
 
 **Interfaces:**
-- Produces: `EnforceMode` (`Off|Warn|Block`, from `ENGRAM_ENFORCE`); `extract_proposed(tool_name, tool_input) -> Option<(Option<String> path, String content)>`; `pre_tool_use_decision(violations: &[Violation], mode: EnforceMode) -> Option<String>` (the JSON to print, or None); `cmd_hook_pre_tool_use(db, stdin_json, mode, provider) -> Result<Option<String>>`.
+- Produces: `EnforceMode` (`Off|Warn|Block`, from `RECALL_ENFORCE`); `extract_proposed(tool_name, tool_input) -> Option<(Option<String> path, String content)>`; `pre_tool_use_decision(violations: &[Violation], mode: EnforceMode) -> Option<String>` (the JSON to print, or None); `cmd_hook_pre_tool_use(db, stdin_json, mode, provider) -> Result<Option<String>>`.
 
-- [ ] **Step 1: Write the failing tests in the `#[cfg(test)]` block of `crates/engram-cli/src/lib.rs`**
+- [ ] **Step 1: Write the failing tests in the `#[cfg(test)]` block of `crates/recall-cli/src/lib.rs`**
 
 ```rust
     #[test]
@@ -197,7 +197,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
     #[test]
     fn decision_block_denies_when_violations() {
-        use engram_capture::Violation;
+        use recall_capture::Violation;
         let v = vec![Violation { rule: "No barrels".into(), explanation: "re-export".into() }];
         let out = pre_tool_use_decision(&v, EnforceMode::Block).unwrap();
         assert!(out.contains("\"permissionDecision\":\"deny\""));
@@ -206,7 +206,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
     #[test]
     fn decision_warn_allows_with_context() {
-        use engram_capture::Violation;
+        use recall_capture::Violation;
         let v = vec![Violation { rule: "No barrels".into(), explanation: "re-export".into() }];
         let out = pre_tool_use_decision(&v, EnforceMode::Warn).unwrap();
         assert!(out.contains("additionalContext"));
@@ -216,7 +216,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
     #[test]
     fn decision_none_when_no_violations_or_off() {
         assert!(pre_tool_use_decision(&[], EnforceMode::Block).is_none());
-        use engram_capture::Violation;
+        use recall_capture::Violation;
         let v = vec![Violation { rule: "x".into(), explanation: "y".into() }];
         assert!(pre_tool_use_decision(&v, EnforceMode::Off).is_none());
     }
@@ -224,20 +224,20 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `cargo test -p engram-cli pre_tool_use`
+Run: `cargo test -p recall-cli pre_tool_use`
 Expected: FAIL — items not found.
 
-- [ ] **Step 3: Add the implementations to `crates/engram-cli/src/lib.rs`** (above the test block)
+- [ ] **Step 3: Add the implementations to `crates/recall-cli/src/lib.rs`** (above the test block)
 
 ```rust
-use engram_capture::{check, Violation};
+use recall_capture::{check, Violation};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EnforceMode { Off, Warn, Block }
 
 impl EnforceMode {
     pub fn from_env() -> Self {
-        match std::env::var("ENGRAM_ENFORCE").as_deref() {
+        match std::env::var("RECALL_ENFORCE").as_deref() {
             Ok("block") => EnforceMode::Block,
             Ok("off") => EnforceMode::Off,
             _ => EnforceMode::Warn, // default
@@ -277,7 +277,7 @@ pub fn pre_tool_use_decision(violations: &[Violation], mode: EnforceMode) -> Opt
             "hookSpecificOutput": {
                 "hookEventName": "PreToolUse",
                 "permissionDecision": "deny",
-                "permissionDecisionReason": format!("This edit violates your Engram conventions:\n{summary}")
+                "permissionDecisionReason": format!("This edit violates your Recall conventions:\n{summary}")
             }
         }),
         EnforceMode::Warn => json!({
@@ -310,14 +310,14 @@ pub async fn cmd_hook_pre_tool_use(
     let cwd = v.get("cwd").and_then(|c| c.as_str()).map(std::path::PathBuf::from)
         .unwrap_or(std::env::current_dir()?);
     let store = Store::open(db)?;
-    let mut ctx = engram_inject::detect_context(&cwd);
+    let mut ctx = recall_inject::detect_context(&cwd);
     // Narrow languages by the edited file extension when present.
     if let Some(p) = &path {
         if let Some(lang) = lang_for_path(p) {
             ctx.languages = vec![lang];
         }
     }
-    let convs = engram_inject::select(&store.active()?, &ctx, 4000);
+    let convs = recall_inject::select(&store.active()?, &ctx, 4000);
     let violations = check(&content, &convs, provider).await.unwrap_or_default(); // fail open
     Ok(pre_tool_use_decision(&violations, mode))
 }
@@ -332,15 +332,15 @@ fn lang_for_path(p: &str) -> Option<String> {
 }
 ```
 
-- [ ] **Step 4: Route the event in `crates/engram-cli/src/main.rs`** — add to the `Hook` match:
+- [ ] **Step 4: Route the event in `crates/recall-cli/src/main.rs`** — add to the `Hook` match:
 
 ```rust
                 "pre-tool-use" => {
-                    let mode = engram_cli::EnforceMode::from_env();
-                    if mode != engram_cli::EnforceMode::Off {
+                    let mode = recall_cli::EnforceMode::from_env();
+                    if mode != recall_cli::EnforceMode::Off {
                         if let Some(provider) = agent_cli::detect() {
                             if let Some(out) =
-                                engram_cli::cmd_hook_pre_tool_use(&db, &input, mode, provider.as_ref()).await?
+                                recall_cli::cmd_hook_pre_tool_use(&db, &input, mode, provider.as_ref()).await?
                             {
                                 println!("{out}");
                             }
@@ -351,13 +351,13 @@ fn lang_for_path(p: &str) -> Option<String> {
 
 - [ ] **Step 5: Run tests + build**
 
-Run: `cargo test -p engram-cli && cargo build`
+Run: `cargo test -p recall-cli && cargo build`
 Expected: PASS; binary builds.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add crates/engram-cli
+git add crates/recall-cli
 git commit -m "feat(cli): pre-tool-use enforcement hook (off|warn|block, fail-open)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -370,7 +370,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 **Files:**
 - Modify: `plugins/claude-code/hooks/hooks.json`
 - Modify: `plugins/codex/hooks/hooks.json`
-- Modify: `skills/engram/SKILL.md` (note enforcement)
+- Modify: `skills/recall/SKILL.md` (note enforcement)
 - Modify: `docs/DEV.md` (how to enable block mode)
 
 **Interfaces:**
@@ -383,7 +383,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
       {
         "matcher": "Write|Edit|MultiEdit",
         "hooks": [
-          { "type": "command", "command": "npx -y @tlgimenes/engram hook pre-tool-use", "timeout": 30 }
+          { "type": "command", "command": "npx -y @tlgimenes/recall hook pre-tool-use", "timeout": 30 }
         ]
       }
     ]
@@ -396,19 +396,19 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
       {
         "matcher": "apply_patch|Write|Edit",
         "hooks": [
-          { "type": "command", "command": "npx -y @tlgimenes/engram hook pre-tool-use", "timeout": 30 }
+          { "type": "command", "command": "npx -y @tlgimenes/recall hook pre-tool-use", "timeout": 30 }
         ]
       }
     ]
 ```
 
-- [ ] **Step 3: Append to `skills/engram/SKILL.md`** (so the agent understands blocks)
+- [ ] **Step 3: Append to `skills/recall/SKILL.md`** (so the agent understands blocks)
 
 ```markdown
 
 ## Enforcement
 
-If an edit is blocked with a "violates your Engram conventions" reason, fix the
+If an edit is blocked with a "violates your Recall conventions" reason, fix the
 code to satisfy the cited convention and retry — don't work around it. Conventions
 are the developer's explicit rules.
 ```
@@ -420,14 +420,14 @@ Then run `just sync-plugins` to propagate the skill into both plugins.
 ````markdown
 ## Enforcement mode
 
-Engram checks edits against your conventions. Set the mode via `ENGRAM_ENFORCE`:
+Recall checks edits against your conventions. Set the mode via `RECALL_ENFORCE`:
 
 - `warn` (default) — adds a heads-up but allows the edit
 - `block` — denies edits that violate a convention
 - `off` — disables the check
 
 ```bash
-export ENGRAM_ENFORCE=block   # in your shell / agent env
+export RECALL_ENFORCE=block   # in your shell / agent env
 ```
 The check fails open (allows) on any provider error, so it never wedges a session.
 ````
@@ -463,10 +463,10 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 **Placeholder scan:** No TBD/TODO. Fail-open (`unwrap_or_default`) is deliberate and documented.
 
-**Type consistency:** `Violation` is the `engram-capture` type reused by the CLI; `EnforceMode`, `extract_proposed`, `pre_tool_use_decision`, `cmd_hook_pre_tool_use` signatures match between lib and main; hook payload matches the verified `permissionDecision` contract.
+**Type consistency:** `Violation` is the `recall-capture` type reused by the CLI; `EnforceMode`, `extract_proposed`, `pre_tool_use_decision`, `cmd_hook_pre_tool_use` signatures match between lib and main; hook payload matches the verified `permissionDecision` contract.
 
 ---
 
 ## Execution Handoff
 
-Plan complete and saved to `docs/superpowers/plans/2026-06-28-engram-planFF-enforcement.md`. Execute after Plans 2 and 3 (it depends on the provider + the plugins). Ship as the second launch beat.
+Plan complete and saved to `docs/superpowers/plans/2026-06-28-recall-planFF-enforcement.md`. Execute after Plans 2 and 3 (it depends on the provider + the plugins). Ship as the second launch beat.

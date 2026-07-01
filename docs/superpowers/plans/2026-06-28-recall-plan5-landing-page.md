@@ -1,4 +1,4 @@
-# Engram Plan 5 — Landing Page
+# Recall Plan 5 — Landing Page
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -12,8 +12,8 @@
 
 - **Aesthetic:** near-black background (`#0a0a0b`), one green accent (`#4ade80`-ish), mono for code/terminal + grotesk for prose, generous spacing, subtle borders (`white/10`). No heavy frameworks; hand-rolled components.
 - **Self-contained demo:** the hero "wow" is a styled terminal component with real text — it must look great with **no external GIF**. A VHS GIF (Plan 6) can augment later.
-- **Build output:** `apps/web/dist`. `base` is `/engram/` for the GitHub Pages project page, overridable to `/` for a custom domain via `PAGES_BASE`.
-- **Install commands shown must be exact:** `npx -y @tlgimenes/engram`, `brew install tlgimenes/engram/engram`, the curl installer, and the plugin-store commands for Claude Code + Codex.
+- **Build output:** `apps/web/dist`. `base` is `/recall/` for the GitHub Pages project page, overridable to `/` for a custom domain via `PAGES_BASE`.
+- **Install commands shown must be exact:** `npx -y @tlgimenes/recall`, `brew install tlgimenes/recall/recall`, the curl installer, and the plugin-store commands for Claude Code + Codex.
 - **Run with Bun:** `bun --filter './apps/web' <script>`.
 - **Commit style:** end every commit body with `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`.
 
@@ -60,12 +60,12 @@ body {
 - [ ] **Step 2: Update `apps/web/index.html`** `<head>` (title, description, fonts)
 
 ```html
-    <title>Engram — teach your AI once, it writes code like you everywhere</title>
+    <title>Recall — teach your AI once, it writes code like you everywhere</title>
     <meta
       name="description"
-      content="Engram is a personal coding-convention brain for AI agents. Correct your AI once — it remembers and applies it in every repo, branch, and agent (Claude Code, Codex)."
+      content="Recall is a personal coding-convention brain for AI agents. Correct your AI once — it remembers and applies it in every repo, branch, and agent (Claude Code, Codex)."
     />
-    <meta property="og:title" content="Engram — the convention brain for coding agents" />
+    <meta property="og:title" content="Recall — the convention brain for coding agents" />
     <meta property="og:description" content="Teach your AI once. It writes code like you in every repo and every agent." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -132,7 +132,7 @@ type Line = { kind: "cmd" | "out" | "dim" | "accent"; text: string };
 const SESSION_A: Line[] = [
   { kind: "dim", text: "# repo: acme/api · agent: Claude Code" },
   { kind: "cmd", text: "you: stop creating barrel files — import directly" },
-  { kind: "accent", text: "engram ✓ learned: \"Import directly; no barrel files\" (global)" },
+  { kind: "accent", text: "recall ✓ learned: \"Import directly; no barrel files\" (global)" },
 ];
 
 const SESSION_B: Line[] = [
@@ -213,8 +213,8 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 import { CopyButton } from "./CopyButton";
 import { Terminal } from "./Terminal";
 
-const GH = "https://github.com/tlgimenes/engram";
-const INSTALL = "npx -y @tlgimenes/engram";
+const GH = "https://github.com/tlgimenes/recall";
+const INSTALL = "npx -y @tlgimenes/recall";
 
 export function Hero() {
   return (
@@ -229,7 +229,7 @@ export function Hero() {
           It writes code <span className="text-[var(--color-accent)]">like you</span> everywhere.
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-balance text-lg text-[var(--color-muted)]">
-          Engram is a personal convention brain for coding agents. Correct your AI
+          Recall is a personal convention brain for coding agents. Correct your AI
           once — it remembers and applies it in every repo, every branch, and every
           agent. Claude Code, Codex, and beyond.
         </p>
@@ -259,8 +259,8 @@ export function Hero() {
 
 ```tsx
 const STEPS = [
-  { n: "1", t: "Correct it once", d: "Tell any agent how you like things — or just work, and Engram distills your conventions from the session." },
-  { n: "2", t: "Engram remembers", d: "Curated, compact rules — scoped to you, a language, a repo, or a branch. Stale rules are superseded, never piled up." },
+  { n: "1", t: "Correct it once", d: "Tell any agent how you like things — or just work, and Recall distills your conventions from the session." },
+  { n: "2", t: "Recall remembers", d: "Curated, compact rules — scoped to you, a language, a repo, or a branch. Stale rules are superseded, never piled up." },
   { n: "3", t: "Applied everywhere", d: "Every new session in every repo and every agent starts already knowing your conventions. No copy-pasting CLAUDE.md." },
 ];
 
@@ -290,7 +290,7 @@ const FEATURES = [
   { t: "Cross-repo & cross-branch", d: "Scoped to you, not the project. Global style follows you; repo/branch rules stay put." },
   { t: "Curated, not logged", d: "Compact, imperative rules — not a dump of everything you ever did." },
   { t: "Local-first", d: "A single fast Rust binary + SQLite on your machine. Inspectable and editable." },
-  { t: "Uses your own agent", d: "No extra model to run or pay for — Engram distills via the Claude Code / Codex you already have." },
+  { t: "Uses your own agent", d: "No extra model to run or pay for — Recall distills via the Claude Code / Codex you already have." },
   { t: "Enforced (soon)", d: "Opt-in PreToolUse gating blocks edits that violate a convention, not just reminds." },
 ];
 
@@ -319,12 +319,12 @@ export function Features() {
 import { CopyButton } from "./CopyButton";
 
 const ROWS: { label: string; cmd: string }[] = [
-  { label: "Claude Code", cmd: "/plugin marketplace add tlgimenes/engram" },
-  { label: "…then", cmd: "/plugin install engram@engram" },
-  { label: "Codex", cmd: "codex plugin marketplace add tlgimenes/engram" },
-  { label: "npm / npx", cmd: "npx -y @tlgimenes/engram" },
-  { label: "Homebrew", cmd: "brew install tlgimenes/engram/engram" },
-  { label: "curl", cmd: "curl -fsSL https://github.com/tlgimenes/engram/releases/latest/download/engram-installer.sh | sh" },
+  { label: "Claude Code", cmd: "/plugin marketplace add tlgimenes/recall" },
+  { label: "…then", cmd: "/plugin install recall@recall" },
+  { label: "Codex", cmd: "codex plugin marketplace add tlgimenes/recall" },
+  { label: "npm / npx", cmd: "npx -y @tlgimenes/recall" },
+  { label: "Homebrew", cmd: "brew install tlgimenes/recall/recall" },
+  { label: "curl", cmd: "curl -fsSL https://github.com/tlgimenes/recall/releases/latest/download/recall-installer.sh | sh" },
 ];
 
 export function Install() {
@@ -355,10 +355,10 @@ export function Footer() {
   return (
     <footer className="border-t border-[var(--color-border)]">
       <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 py-10 text-sm text-[var(--color-muted)] sm:flex-row">
-        <span className="font-mono">engram</span>
+        <span className="font-mono">recall</span>
         <nav className="flex gap-6">
-          <a href="https://github.com/tlgimenes/engram" className="hover:text-[var(--color-fg)]">GitHub</a>
-          <a href="https://github.com/tlgimenes/engram#readme" className="hover:text-[var(--color-fg)]">Docs</a>
+          <a href="https://github.com/tlgimenes/recall" className="hover:text-[var(--color-fg)]">GitHub</a>
+          <a href="https://github.com/tlgimenes/recall#readme" className="hover:text-[var(--color-fg)]">Docs</a>
           <a href="#install" className="hover:text-[var(--color-fg)]">Install</a>
         </nav>
         <span>MIT · built in Rust</span>
@@ -467,7 +467,7 @@ test("hero states the value proposition", () => {
 
 test("shows the npx install command", () => {
   render(<App />);
-  expect(screen.getAllByText(/npx -y @tlgimenes\/engram/).length).toBeGreaterThan(0);
+  expect(screen.getAllByText(/npx -y @tlgimenes\/recall/).length).toBeGreaterThan(0);
 });
 
 test("tells the cross-agent story", () => {
@@ -536,7 +536,7 @@ jobs:
       - name: Build (project-page base)
         run: bun --filter './apps/web' build
         env:
-          PAGES_BASE: /engram/
+          PAGES_BASE: /recall/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
@@ -565,7 +565,7 @@ jobs:
 Run: `python3 -c "import yaml; [yaml.safe_load(open(p)) for p in ['.github/workflows/deploy-web.yml','.github/workflows/ci.yml']]; print('workflows OK')"`
 Expected: `workflows OK`.
 
-- [ ] **Step 4: One-time GitHub setup** (manual, record in PR): repo **Settings → Pages → Source = "GitHub Actions"**. Site will be at `https://tlgimenes.github.io/engram/`. (For a custom domain later: set it in Settings → Pages and build with `PAGES_BASE=/`.)
+- [ ] **Step 4: One-time GitHub setup** (manual, record in PR): repo **Settings → Pages → Source = "GitHub Actions"**. Site will be at `https://tlgimenes.github.io/recall/`. (For a custom domain later: set it in Settings → Pages and build with `PAGES_BASE=/`.)
 
 - [ ] **Step 5: Commit + push, confirm deploy**
 
@@ -576,7 +576,7 @@ git commit -m "ci(web): deploy apps/web to GitHub Pages
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 git push
 ```
-Expected: the Deploy-web workflow runs and publishes; the page loads at the Pages URL with assets resolving under `/engram/`.
+Expected: the Deploy-web workflow runs and publishes; the page loads at the Pages URL with assets resolving under `/recall/`.
 
 ---
 
@@ -593,10 +593,10 @@ Expected: the Deploy-web workflow runs and publishes; the page loads at the Page
 
 **Placeholder scan:** No TBD/TODO. All component code is complete and renders without external assets.
 
-**Type consistency:** Component prop shapes (`CopyButton text`, `Terminal` lines) are internally consistent; install commands match Plan 3's plugin names and Plan 4's package/tap names exactly (`@tlgimenes/engram`, `tlgimenes/engram/engram`, `engram@engram`).
+**Type consistency:** Component prop shapes (`CopyButton text`, `Terminal` lines) are internally consistent; install commands match Plan 3's plugin names and Plan 4's package/tap names exactly (`@tlgimenes/recall`, `tlgimenes/recall/recall`, `recall@recall`).
 
 ---
 
 ## Execution Handoff
 
-Plan complete and saved to `docs/superpowers/plans/2026-06-28-engram-plan5-landing-page.md`. Execute after Plan 0 (independent of Plans 1–4).
+Plan complete and saved to `docs/superpowers/plans/2026-06-28-recall-plan5-landing-page.md`. Execute after Plan 0 (independent of Plans 1–4).

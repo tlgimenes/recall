@@ -1,45 +1,45 @@
-# Engram Plan 3 — Plugin Packaging (Claude Code + Codex)
+# Recall Plan 3 — Plugin Packaging (Claude Code + Codex)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship installable Claude Code and Codex plugins that wire Engram into a real session — an MCP server, a convention-aware skill, an `engram_learn` tool, a SessionStart hook that injects conventions, and a Stop hook that captures new ones — so a user gets the full "teach once, applied everywhere" loop in one install.
+**Goal:** Ship installable Claude Code and Codex plugins that wire Recall into a real session — an MCP server, a convention-aware skill, an `recall_learn` tool, a SessionStart hook that injects conventions, and a Stop hook that captures new ones — so a user gets the full "teach once, applied everywhere" loop in one install.
 
-**Architecture:** One canonical `SKILL.md` synced into both plugins. Each plugin is a thin wrapper: `.mcp.json` runs `npx -y @tlgimenes/engram mcp`; `hooks/hooks.json` runs `npx -y @tlgimenes/engram hook <event>` (which reads the hook stdin JSON and prints the portable `hookSpecificOutput` injection or fires background capture). The hook contract is shared between Claude Code and Codex; we normalize the few divergent fields.
+**Architecture:** One canonical `SKILL.md` synced into both plugins. Each plugin is a thin wrapper: `.mcp.json` runs `npx -y @tlgimenes/recall mcp`; `hooks/hooks.json` runs `npx -y @tlgimenes/recall hook <event>` (which reads the hook stdin JSON and prints the portable `hookSpecificOutput` injection or fires background capture). The hook contract is shared between Claude Code and Codex; we normalize the few divergent fields.
 
-**Tech Stack:** Rust (extends `engram-mcp` + `engram-cli` from Plans 1–2), plugin JSON manifests, `just` for skill sync. No network needed for the plugin files themselves.
+**Tech Stack:** Rust (extends `recall-mcp` + `recall-cli` from Plans 1–2), plugin JSON manifests, `just` for skill sync. No network needed for the plugin files themselves.
 
 ## Global Constraints
 
-- **npm package name:** `@tlgimenes/engram`. Plugins reference it via `npx -y @tlgimenes/engram …`. **This plan publishes nothing to npm** — it only references the name. (Actual npm publish is Plan 4, gated on account recovery.)
+- **npm package name:** `@tlgimenes/recall`. Plugins reference it via `npx -y @tlgimenes/recall …`. **This plan publishes nothing to npm** — it only references the name. (Actual npm publish is Plan 4, gated on account recovery.)
 - **Hook injection payload (portable across both hosts):** `{"hookSpecificOutput":{"hookEventName":"<Event>","additionalContext":"<text>"}}`. Plain text on stdout also works; exit 0 = success.
 - **Cross-host hook differences to handle:** Codex `transcript_path` may be `null`; Codex Stop stdin uses different field names; Codex requires the user to trust hooks via `/hooks`. Read defensively.
 - **Skills are DRY:** canonical source in `/skills`, copied into `plugins/*/skills` by `just sync-plugins`; CI fails on drift.
-- **Dogfood override:** during development, point the MCP command and hook commands at `./target/debug/engram` instead of `npx` (see Task 5).
+- **Dogfood override:** during development, point the MCP command and hook commands at `./target/debug/recall` instead of `npx` (see Task 5).
 - **Commit style:** end every commit body with `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`.
 
 ---
 
-### Task 1: `engram_learn` MCP tool + relocate `parse_scope` to `engram-inject`
+### Task 1: `recall_learn` MCP tool + relocate `parse_scope` to `recall-inject`
 
 **Files:**
-- Modify: `crates/engram-inject/src/lib.rs` (add `pub mod scope; pub use scope::*;`)
-- Create: `crates/engram-inject/src/scope.rs` (move `parse_scope` here, taking an explicit `cwd`)
-- Modify: `crates/engram-cli/src/lib.rs` (re-export `parse_scope` from inject; drop the local copy)
-- Modify: `crates/engram-mcp/Cargo.toml` (add `engram-core`, `chrono`, `uuid` deps)
-- Modify: `crates/engram-mcp/src/lib.rs` (add `handle_learn` + `engram_learn` tool)
-- Test: inline in `crates/engram-inject/src/scope.rs` and `crates/engram-mcp/src/lib.rs`
+- Modify: `crates/recall-inject/src/lib.rs` (add `pub mod scope; pub use scope::*;`)
+- Create: `crates/recall-inject/src/scope.rs` (move `parse_scope` here, taking an explicit `cwd`)
+- Modify: `crates/recall-cli/src/lib.rs` (re-export `parse_scope` from inject; drop the local copy)
+- Modify: `crates/recall-mcp/Cargo.toml` (add `recall-core`, `chrono`, `uuid` deps)
+- Modify: `crates/recall-mcp/src/lib.rs` (add `handle_learn` + `recall_learn` tool)
+- Test: inline in `crates/recall-inject/src/scope.rs` and `crates/recall-mcp/src/lib.rs`
 
 **Interfaces:**
-- Produces: `engram_inject::parse_scope(s: &str, cwd: &Path) -> anyhow::Result<Scope>`; `engram_mcp::handle_learn(db_path: &Path, rule: &str, scope: &str, tags: Vec<String>, cwd: Option<&str>) -> Result<String>` and an `engram_learn` MCP tool.
-- Consumes: `engram_inject::detect_context`, `engram_core` types, `engram_store::Store`.
+- Produces: `recall_inject::parse_scope(s: &str, cwd: &Path) -> anyhow::Result<Scope>`; `recall_mcp::handle_learn(db_path: &Path, rule: &str, scope: &str, tags: Vec<String>, cwd: Option<&str>) -> Result<String>` and an `recall_learn` MCP tool.
+- Consumes: `recall_inject::detect_context`, `recall_core` types, `recall_store::Store`.
 
-- [ ] **Step 1: Write the failing test in `crates/engram-inject/src/scope.rs`**
+- [ ] **Step 1: Write the failing test in `crates/recall-inject/src/scope.rs`**
 
 ```rust
 #[cfg(test)]
 mod tests {
     use super::parse_scope;
-    use engram_core::Scope;
+    use recall_core::Scope;
     use std::path::Path;
 
     #[test]
@@ -60,22 +60,22 @@ mod tests {
 
 - [ ] **Step 2: Run it to verify failure**
 
-Run: `cargo test -p engram-inject scope`
+Run: `cargo test -p recall-inject scope`
 Expected: FAIL — module/function not found.
 
-- [ ] **Step 3: Add module wiring to `crates/engram-inject/src/lib.rs`**
+- [ ] **Step 3: Add module wiring to `crates/recall-inject/src/lib.rs`**
 
 ```rust
 mod scope;
 pub use scope::*;
 ```
 
-- [ ] **Step 4: Write `crates/engram-inject/src/scope.rs`** (above the test block)
+- [ ] **Step 4: Write `crates/recall-inject/src/scope.rs`** (above the test block)
 
 ```rust
 use crate::detect_context;
 use anyhow::{anyhow, Result};
-use engram_core::Scope;
+use recall_core::Scope;
 use std::path::Path;
 
 /// Parse a `--scope` string into a `Scope`. `repo`/`branch` resolve from the
@@ -105,34 +105,34 @@ pub fn parse_scope(s: &str, cwd: &Path) -> Result<Scope> {
 }
 ```
 
-- [ ] **Step 5: Update `crates/engram-cli/src/lib.rs`** — delete the local `parse_scope` fn and re-export the moved one. Replace the old `pub fn parse_scope(...) { ... }` with:
+- [ ] **Step 5: Update `crates/recall-cli/src/lib.rs`** — delete the local `parse_scope` fn and re-export the moved one. Replace the old `pub fn parse_scope(...) { ... }` with:
 
 ```rust
-pub use engram_inject::parse_scope;
+pub use recall_inject::parse_scope;
 ```
 
 And update `cmd_learn`'s call site from `parse_scope(scope)?` to `parse_scope(scope, &std::env::current_dir()?)?`.
 
 - [ ] **Step 6: Run inject + cli tests**
 
-Run: `cargo test -p engram-inject && cargo test -p engram-cli`
+Run: `cargo test -p recall-inject && cargo test -p recall-cli`
 Expected: PASS (the cli `parse_scope_*` tests still pass via the re-export).
 
-- [ ] **Step 7: Add deps to `crates/engram-mcp/Cargo.toml`**
+- [ ] **Step 7: Add deps to `crates/recall-mcp/Cargo.toml`**
 
 ```toml
-engram-core = { path = "../engram-core" }
+recall-core = { path = "../recall-core" }
 chrono = { workspace = true }
 uuid = { workspace = true }
 ```
 
-- [ ] **Step 8: Write the failing test in `crates/engram-mcp/src/lib.rs`** (add to the existing `#[cfg(test)] mod tests`)
+- [ ] **Step 8: Write the failing test in `crates/recall-mcp/src/lib.rs`** (add to the existing `#[cfg(test)] mod tests`)
 
 ```rust
     #[test]
     fn handle_learn_then_list_shows_rule() {
         let tmp = tempfile::tempdir().unwrap();
-        let db = tmp.path().join("engram.db");
+        let db = tmp.path().join("recall.db");
         let msg = super::handle_learn(&db, "Use early returns", "global", vec![], None).unwrap();
         assert!(msg.contains("Use early returns"));
         assert!(super::handle_list(&db).unwrap().contains("Use early returns"));
@@ -141,10 +141,10 @@ uuid = { workspace = true }
 
 - [ ] **Step 9: Run it to verify failure**
 
-Run: `cargo test -p engram-mcp handle_learn`
+Run: `cargo test -p recall-mcp handle_learn`
 Expected: FAIL — `cannot find function handle_learn`.
 
-- [ ] **Step 10: Add `handle_learn` + the tool to `crates/engram-mcp/src/lib.rs`**
+- [ ] **Step 10: Add `handle_learn` + the tool to `crates/recall-mcp/src/lib.rs`**
 
 Add the handler (near `handle_list`):
 
@@ -157,7 +157,7 @@ pub fn handle_learn(
     cwd: Option<&str>,
 ) -> Result<String> {
     use chrono::Utc;
-    use engram_core::{Convention, Provenance, Source, Status};
+    use recall_core::{Convention, Provenance, Source, Status};
     use uuid::Uuid;
 
     let store = Store::open(db_path)?;
@@ -165,7 +165,7 @@ pub fn handle_learn(
         Some(c) => PathBuf::from(c),
         None => std::env::current_dir()?,
     };
-    let scope = engram_inject::parse_scope(scope, &dir)?;
+    let scope = recall_inject::parse_scope(scope, &dir)?;
     let now = Utc::now();
     let c = Convention {
         id: Uuid::new_v4(),
@@ -208,13 +208,13 @@ pub struct LearnParams {
 }
 ```
 
-Add the tool method inside the `#[tool_router] impl Engram { ... }` block:
+Add the tool method inside the `#[tool_router] impl Recall { ... }` block:
 
 ```rust
     #[tool(
         description = "Record a durable coding convention the developer wants followed. Call this when they state a preference or correct you (e.g. 'always X', 'never Y', 'we use Z here')."
     )]
-    fn engram_learn(&self, Parameters(p): Parameters<LearnParams>) -> Result<CallToolResult, McpError> {
+    fn recall_learn(&self, Parameters(p): Parameters<LearnParams>) -> Result<CallToolResult, McpError> {
         let text = handle_learn(
             &self.db_path,
             &p.rule,
@@ -231,37 +231,37 @@ Add the tool method inside the `#[tool_router] impl Engram { ... }` block:
 
 - [ ] **Step 11: Run mcp tests**
 
-Run: `cargo test -p engram-mcp`
+Run: `cargo test -p recall-mcp`
 Expected: PASS.
 
 - [ ] **Step 12: Commit**
 
 ```bash
-git add crates/engram-inject crates/engram-cli crates/engram-mcp
-git commit -m "feat(mcp): engram_learn tool; move parse_scope to engram-inject
+git add crates/recall-inject crates/recall-cli crates/recall-mcp
+git commit -m "feat(mcp): recall_learn tool; move parse_scope to recall-inject
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
 
 ---
 
-### Task 2: `engram hook` CLI entrypoint (session-start + stop)
+### Task 2: `recall hook` CLI entrypoint (session-start + stop)
 
 **Files:**
-- Modify: `crates/engram-cli/src/lib.rs` (add `hook_session_start`, `hook_stop_transcript`)
-- Modify: `crates/engram-cli/src/main.rs` (add `Hook { event }` subcommand)
-- Test: extend the `#[cfg(test)]` block in `crates/engram-cli/src/lib.rs`
+- Modify: `crates/recall-cli/src/lib.rs` (add `hook_session_start`, `hook_stop_transcript`)
+- Modify: `crates/recall-cli/src/main.rs` (add `Hook { event }` subcommand)
+- Test: extend the `#[cfg(test)]` block in `crates/recall-cli/src/lib.rs`
 
 **Interfaces:**
 - Produces: `hook_session_start(db: &Path, stdin_json: &str) -> Result<String>` (returns the JSON to print, or `""` if nothing to inject); `hook_stop_transcript(stdin_json: &str) -> Option<String>` (extracts a non-empty `transcript_path`).
 
-- [ ] **Step 1: Write the failing tests in the `#[cfg(test)]` block of `crates/engram-cli/src/lib.rs`**
+- [ ] **Step 1: Write the failing tests in the `#[cfg(test)]` block of `crates/recall-cli/src/lib.rs`**
 
 ```rust
     #[test]
     fn hook_session_start_injects_active_conventions() {
         let tmp = tempfile::tempdir().unwrap();
-        let db = tmp.path().join("engram.db");
+        let db = tmp.path().join("recall.db");
         cmd_learn(&db, "Use early returns", "global", vec![]).unwrap();
         let stdin = format!(r#"{{"cwd":"{}","hook_event_name":"SessionStart"}}"#, tmp.path().display());
         let out = hook_session_start(&db, &stdin).unwrap();
@@ -273,7 +273,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
     #[test]
     fn hook_session_start_empty_when_no_conventions() {
         let tmp = tempfile::tempdir().unwrap();
-        let db = tmp.path().join("engram.db");
+        let db = tmp.path().join("recall.db");
         let out = hook_session_start(&db, r#"{"cwd":"/tmp"}"#).unwrap();
         assert_eq!(out, "");
     }
@@ -291,10 +291,10 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `cargo test -p engram-cli hook`
+Run: `cargo test -p recall-cli hook`
 Expected: FAIL — `cannot find function hook_session_start`.
 
-- [ ] **Step 3: Add the implementations to `crates/engram-cli/src/lib.rs`** (above the test block)
+- [ ] **Step 3: Add the implementations to `crates/recall-cli/src/lib.rs`** (above the test block)
 
 ```rust
 use serde_json::{json, Value};
@@ -308,9 +308,9 @@ pub fn hook_session_start(db: &Path, stdin_json: &str) -> Result<String> {
     };
     let store = Store::open(db)?;
     let convs = store.active()?;
-    let ctx = engram_inject::detect_context(&cwd);
-    let selected = engram_inject::select(&convs, &ctx, 4000);
-    let rendered = engram_inject::render(&selected);
+    let ctx = recall_inject::detect_context(&cwd);
+    let selected = recall_inject::select(&convs, &ctx, 4000);
+    let rendered = recall_inject::render(&selected);
     if rendered.is_empty() {
         return Ok(String::new());
     }
@@ -331,7 +331,7 @@ pub fn hook_stop_transcript(stdin_json: &str) -> Option<String> {
 }
 ```
 
-- [ ] **Step 4: Wire the `Hook` subcommand in `crates/engram-cli/src/main.rs`**
+- [ ] **Step 4: Wire the `Hook` subcommand in `crates/recall-cli/src/main.rs`**
 
 Add to the `Cmd` enum:
 
@@ -352,13 +352,13 @@ Add to the `match cli.cmd` block:
             std::io::stdin().read_to_string(&mut input).ok();
             match event.as_str() {
                 "session-start" => {
-                    let out = engram_cli::hook_session_start(&db, &input)?;
+                    let out = recall_cli::hook_session_start(&db, &input)?;
                     if !out.is_empty() {
                         println!("{out}");
                     }
                 }
                 "stop" => {
-                    if let Some(tp) = engram_cli::hook_stop_transcript(&input) {
+                    if let Some(tp) = recall_cli::hook_stop_transcript(&input) {
                         // fire-and-forget: run capture in the background, don't block session end
                         if let Ok(exe) = std::env::current_exe() {
                             let _ = std::process::Command::new(exe).arg("capture").arg(tp).spawn();
@@ -372,22 +372,22 @@ Add to the `match cli.cmd` block:
 
 - [ ] **Step 5: Run tests + build**
 
-Run: `cargo test -p engram-cli && cargo build`
+Run: `cargo test -p recall-cli && cargo build`
 Expected: PASS; binary builds.
 
 - [ ] **Step 6: Manual smoke of the hook I/O**
 
 ```bash
-ENGRAM_DB=/tmp/hk.db ./target/debug/engram learn "Use early returns" --scope global
-echo '{"cwd":"/tmp","hook_event_name":"SessionStart"}' | ENGRAM_DB=/tmp/hk.db ./target/debug/engram hook session-start
+RECALL_DB=/tmp/hk.db ./target/debug/recall learn "Use early returns" --scope global
+echo '{"cwd":"/tmp","hook_event_name":"SessionStart"}' | RECALL_DB=/tmp/hk.db ./target/debug/recall hook session-start
 ```
 Expected: prints a JSON object containing `hookSpecificOutput` and the rule.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add crates/engram-cli
-git commit -m "feat(cli): engram hook session-start/stop entrypoints
+git add crates/recall-cli
+git commit -m "feat(cli): recall hook session-start/stop entrypoints
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
@@ -397,40 +397,40 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ### Task 3: Canonical skill + Claude Code plugin + `sync-plugins`
 
 **Files:**
-- Create: `skills/engram/SKILL.md`
+- Create: `skills/recall/SKILL.md`
 - Create: `plugins/claude-code/.claude-plugin/plugin.json`
 - Create: `plugins/claude-code/.mcp.json`
 - Create: `plugins/claude-code/hooks/hooks.json`
-- Create: `plugins/claude-code/commands/engram-learn.md`
+- Create: `plugins/claude-code/commands/recall-learn.md`
 - Create: `.claude-plugin/marketplace.json`
 - Modify: `justfile` (add `sync-plugins` + `sync-plugins-check`)
 
 **Interfaces:**
 - Produces: an installable Claude Code plugin + a marketplace catalog at the repo root.
 
-- [ ] **Step 1: Create `skills/engram/SKILL.md`** (the canonical source)
+- [ ] **Step 1: Create `skills/recall/SKILL.md`** (the canonical source)
 
 ```markdown
 ---
-name: engram
-description: Use to follow and record the developer's personal coding conventions. ALWAYS call engram_conventions before writing or editing code. Call engram_learn whenever the developer states a durable preference or corrects you ("always X", "never Y", "we use Z here").
+name: recall
+description: Use to follow and record the developer's personal coding conventions. ALWAYS call recall_conventions before writing or editing code. Call recall_learn whenever the developer states a durable preference or corrects you ("always X", "never Y", "we use Z here").
 ---
 
-# Engram — the developer's convention brain
+# Recall — the developer's convention brain
 
-Engram remembers how THIS developer likes code written, across every repo and
+Recall remembers how THIS developer likes code written, across every repo and
 branch. Use it so your code matches their conventions without being told twice.
 
 ## When to call which tool
 
-- **Before writing or editing code**, call `engram_conventions` to load the
+- **Before writing or editing code**, call `recall_conventions` to load the
   rules relevant to the current repo/branch/languages. Follow them.
 - **When the developer states a durable preference or corrects you** — e.g.
   "always use early returns", "never add barrel files", "we use snake_case for
-  files here" — call `engram_learn` with a compact imperative `rule` and the
+  files here" — call `recall_learn` with a compact imperative `rule` and the
   right `scope` (`global` for personal style, `repo`/`branch` for project rules,
   `language:<lang>` for language-specific ones).
-- To show the developer everything Engram knows, call `engram_list`.
+- To show the developer everything Recall knows, call `recall_list`.
 
 ## Rules of thumb
 
@@ -444,13 +444,13 @@ branch. Use it so your code matches their conventions without being told twice.
 
 ```json
 {
-  "name": "engram",
-  "displayName": "Engram",
+  "name": "recall",
+  "displayName": "Recall",
   "version": "0.1.0",
   "description": "Your personal coding-convention brain: teach your AI once, it writes code like you in every repo and every agent.",
   "author": { "name": "tlgimenes" },
-  "homepage": "https://github.com/tlgimenes/engram",
-  "repository": "https://github.com/tlgimenes/engram",
+  "homepage": "https://github.com/tlgimenes/recall",
+  "repository": "https://github.com/tlgimenes/recall",
   "license": "MIT",
   "keywords": ["mcp", "memory", "conventions", "context", "productivity"]
 }
@@ -461,9 +461,9 @@ branch. Use it so your code matches their conventions without being told twice.
 ```json
 {
   "mcpServers": {
-    "engram": {
+    "recall": {
       "command": "npx",
-      "args": ["-y", "@tlgimenes/engram", "mcp"]
+      "args": ["-y", "@tlgimenes/recall", "mcp"]
     }
   }
 }
@@ -478,14 +478,14 @@ branch. Use it so your code matches their conventions without being told twice.
       {
         "matcher": "startup|resume|clear",
         "hooks": [
-          { "type": "command", "command": "npx -y @tlgimenes/engram hook session-start", "timeout": 30 }
+          { "type": "command", "command": "npx -y @tlgimenes/recall hook session-start", "timeout": 30 }
         ]
       }
     ],
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "npx -y @tlgimenes/engram hook stop", "timeout": 15 }
+          { "type": "command", "command": "npx -y @tlgimenes/recall hook stop", "timeout": 15 }
         ]
       }
     ]
@@ -493,15 +493,15 @@ branch. Use it so your code matches their conventions without being told twice.
 }
 ```
 
-- [ ] **Step 5: Create `plugins/claude-code/commands/engram-learn.md`**
+- [ ] **Step 5: Create `plugins/claude-code/commands/recall-learn.md`**
 
 ```markdown
 ---
-description: Teach Engram a coding convention to remember everywhere
+description: Teach Recall a coding convention to remember everywhere
 argument-hint: <the rule to remember>
 ---
 
-Call the `engram_learn` tool to record this convention: **$ARGUMENTS**
+Call the `recall_learn` tool to record this convention: **$ARGUMENTS**
 
 Choose the scope sensibly (default `global` for personal style; `repo`/`branch`
 for project-specific rules; `language:<lang>` for language rules). Then confirm
@@ -512,11 +512,11 @@ what you recorded.
 
 ```json
 {
-  "name": "engram",
+  "name": "recall",
   "owner": { "name": "tlgimenes", "url": "https://github.com/tlgimenes" },
   "plugins": [
     {
-      "name": "engram",
+      "name": "recall",
       "source": "./plugins/claude-code",
       "description": "Your personal coding-convention brain for Claude Code."
     }
@@ -576,7 +576,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ```json
 {
-  "name": "engram",
+  "name": "recall",
   "version": "0.1.0",
   "description": "Your personal coding-convention brain: teach your AI once, it writes code like you in every repo and every agent.",
   "skills": "./skills/",
@@ -590,9 +590,9 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```json
 {
   "mcpServers": {
-    "engram": {
+    "recall": {
       "command": "npx",
-      "args": ["-y", "@tlgimenes/engram", "mcp"]
+      "args": ["-y", "@tlgimenes/recall", "mcp"]
     }
   }
 }
@@ -607,14 +607,14 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
       {
         "matcher": "startup|resume|clear",
         "hooks": [
-          { "type": "command", "command": "npx -y @tlgimenes/engram hook session-start", "timeout": 30 }
+          { "type": "command", "command": "npx -y @tlgimenes/recall hook session-start", "timeout": 30 }
         ]
       }
     ],
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "npx -y @tlgimenes/engram hook stop", "timeout": 15 }
+          { "type": "command", "command": "npx -y @tlgimenes/recall hook stop", "timeout": 15 }
         ]
       }
     ]
@@ -626,11 +626,11 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ```json
 {
-  "name": "engram",
+  "name": "recall",
   "owner": { "name": "tlgimenes", "url": "https://github.com/tlgimenes" },
   "plugins": [
     {
-      "name": "engram",
+      "name": "recall",
       "source": "./plugins/codex",
       "description": "Your personal coding-convention brain for Codex."
     }
@@ -664,15 +664,15 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - Create: `plugins/claude-code/.mcp.dev.json` (dev variant pointing at the debug binary)
 
 **Interfaces:**
-- Consumes: the built `engram` binary and the plugin from Tasks 3–4.
+- Consumes: the built `recall` binary and the plugin from Tasks 3–4.
 
 - [ ] **Step 1: Create `plugins/claude-code/.mcp.dev.json`** (used for local dogfooding before npm publish)
 
 ```json
 {
   "mcpServers": {
-    "engram": {
-      "command": "./target/debug/engram",
+    "recall": {
+      "command": "./target/debug/recall",
       "args": ["mcp"]
     }
   }
@@ -684,33 +684,33 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ````markdown
 ## Dogfooding the full plugin (before npm publish)
 
-The shipped plugin runs `npx -y @tlgimenes/engram` (published in Plan 4). Until
+The shipped plugin runs `npx -y @tlgimenes/recall` (published in Plan 4). Until
 then, dogfood against the local debug binary:
 
 ```bash
 cargo build
 
 # Option A: register just the MCP server at the local binary (fast loop)
-claude mcp add engram -- ./target/debug/engram mcp
+claude mcp add recall -- ./target/debug/recall mcp
 
 # Option B: install the whole plugin from the local marketplace, then
 # temporarily point its MCP at the debug binary by copying the dev variant:
 cp plugins/claude-code/.mcp.dev.json plugins/claude-code/.mcp.json   # local only; don't commit
 claude plugin marketplace add .
-claude plugin install engram@engram
+claude plugin install recall@recall
 ```
 
 For the hooks to use the local binary during dev, add to `~/.claude/settings.json`
-(SessionStart/Stop) pointing `command` at `./target/debug/engram hook ...`, or
-ensure `engram` is on PATH (`cargo install --path crates/engram-cli`).
+(SessionStart/Stop) pointing `command` at `./target/debug/recall hook ...`, or
+ensure `recall` is on PATH (`cargo install --path crates/recall-cli`).
 
 Smoke test the loop:
 
 ```bash
-./target/debug/engram learn "Import directly; no barrel files" --scope global
+./target/debug/recall learn "Import directly; no barrel files" --scope global
 # new Claude Code session in this repo -> the SessionStart hook injects the rule
-# tell Claude "always prefer early returns" -> it should call engram_learn
-./target/debug/engram list   # confirm both rules are stored
+# tell Claude "always prefer early returns" -> it should call recall_learn
+./target/debug/recall list   # confirm both rules are stored
 ```
 ````
 
@@ -737,18 +737,18 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - Claude Code plugin: manifest, `.mcp.json`, hooks, command, marketplace → Task 3. ✅
 - Codex plugin: manifest, `.mcp.json`, hooks, marketplace → Task 4. ✅
 - SessionStart injection + Stop capture, cross-host (null transcript guard) → Task 2. ✅
-- `engram_learn` MCP tool so the agent records conventions in-session → Task 1. ✅
+- `recall_learn` MCP tool so the agent records conventions in-session → Task 1. ✅
 - Dogfood the real plugin → Task 5. ✅
-- `npx -y @tlgimenes/engram` everywhere; no npm publish here → constraints. ✅
+- `npx -y @tlgimenes/recall` everywhere; no npm publish here → constraints. ✅
 - Codex hook-trust requirement → noted (user runs `/hooks`); documented behavior, no code needed.
 - Enforcement (PreToolUse) → correctly **deferred to the fast-follow plan**.
 
 **Placeholder scan:** No TBD/TODO. The `repo:` field simplification note in Task 1 Step 10 is an explicit clippy guard, not a placeholder.
 
-**Type consistency:** `handle_learn`/`handle_list`/`handle_conventions` share the `db_path: &Path` shape; `parse_scope(s, cwd)` signature is identical across inject/cli/mcp callers; hook functions return the documented portable payload; `engram capture <transcript>` (spawned by the Stop hook) matches the Plan 2 `Cmd::Capture` signature.
+**Type consistency:** `handle_learn`/`handle_list`/`handle_conventions` share the `db_path: &Path` shape; `parse_scope(s, cwd)` signature is identical across inject/cli/mcp callers; hook functions return the documented portable payload; `recall capture <transcript>` (spawned by the Stop hook) matches the Plan 2 `Cmd::Capture` signature.
 
 ---
 
 ## Execution Handoff
 
-Plan complete and saved to `docs/superpowers/plans/2026-06-28-engram-plan3-plugin-packaging.md`. Execute via subagent-driven (recommended) or inline, **after** Plans 0–2.
+Plan complete and saved to `docs/superpowers/plans/2026-06-28-recall-plan3-plugin-packaging.md`. Execute via subagent-driven (recommended) or inline, **after** Plans 0–2.

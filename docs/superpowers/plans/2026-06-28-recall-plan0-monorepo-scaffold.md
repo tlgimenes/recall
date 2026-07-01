@@ -1,4 +1,4 @@
-# Engram Plan 0 — Monorepo Scaffold + CI
+# Recall Plan 0 — Monorepo Scaffold + CI
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -13,10 +13,10 @@
 - **Prerequisites on the executor machine:** a Rust stable toolchain (`cargo`, `rustfmt`, `clippy`) and **Bun ≥ 1.2** (`bun --version`). If missing, install before starting (`curl -fsSL https://bun.com/install | bash`; `rustup` for Rust).
 - **Lockfiles:** commit `Cargo.lock` and the text `bun.lock`. Never commit `bun.lockb`, `package-lock.json`, or `yarn.lock`.
 - **Workspace globs stay narrow:** Bun `workspaces = ["packages/*","apps/*"]` (never `crates/`); Cargo `members = ["crates/*"]`.
-- **Binary name is `engram`** (set later in Plan 1); the published npm/crate names are deferred to Plan 4 (registry collisions noted in the architecture spec). Private packages here use the `@engram/*` scope and need no registry.
+- **Binary name is `recall`** (set later in Plan 1); the published npm/crate names are deferred to Plan 4 (registry collisions noted in the architecture spec). Private packages here use the `@recall/*` scope and need no registry.
 - **Web toolchain pins (stability for the scaffold):** `vite@^6`, `@vitejs/plugin-react@^4` (Babel-based, so React Compiler wires inline). The Vite 8 / plugin-react v6 + Vite+ path is a Plan 5 upgrade.
 - **Commit style:** end every commit body with `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`.
-- **Reconciliation:** this plan creates the root `Cargo.toml` workspace and a stub `crates/engram-core`. Plan 1's Task 1 is therefore reduced to *fleshing out* `engram-core` (adding deps + the domain model), not creating the workspace.
+- **Reconciliation:** this plan creates the root `Cargo.toml` workspace and a stub `crates/recall-core`. Plan 1's Task 1 is therefore reduced to *fleshing out* `recall-core` (adding deps + the domain model), not creating the workspace.
 
 ---
 
@@ -26,11 +26,11 @@
 - Create: `.gitignore`
 - Create: `rust-toolchain.toml`
 - Create: `Cargo.toml` (workspace root)
-- Create: `crates/engram-core/Cargo.toml`
-- Create: `crates/engram-core/src/lib.rs`
+- Create: `crates/recall-core/Cargo.toml`
+- Create: `crates/recall-core/src/lib.rs`
 
 **Interfaces:**
-- Produces: a building virtual Cargo workspace with one member (`engram-core` stub) and shared `[workspace.dependencies]` consumed by Plan 1+.
+- Produces: a building virtual Cargo workspace with one member (`recall-core` stub) and shared `[workspace.dependencies]` consumed by Plan 1+.
 
 - [ ] **Step 1: Create `.gitignore`**
 
@@ -72,7 +72,7 @@ members = ["crates/*"]
 edition = "2021"
 rust-version = "1.82"
 license = "MIT"
-repository = "https://github.com/tlgimenes/engram"
+repository = "https://github.com/tlgimenes/recall"
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
@@ -83,11 +83,11 @@ anyhow = "1"
 tempfile = "3"
 ```
 
-- [ ] **Step 4: Create `crates/engram-core/Cargo.toml`**
+- [ ] **Step 4: Create `crates/recall-core/Cargo.toml`**
 
 ```toml
 [package]
-name = "engram-core"
+name = "recall-core"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
@@ -95,10 +95,10 @@ license.workspace = true
 repository.workspace = true
 ```
 
-- [ ] **Step 5: Create `crates/engram-core/src/lib.rs`** (stub with a toolchain smoke test)
+- [ ] **Step 5: Create `crates/recall-core/src/lib.rs`** (stub with a toolchain smoke test)
 
 ```rust
-//! Engram core — the domain model for the convention brain.
+//! Recall core — the domain model for the convention brain.
 //! Filled in by Plan 1 (model, scoping, dedup, supersession).
 
 #[cfg(test)]
@@ -123,8 +123,8 @@ Expected: no output, exit 0.
 - [ ] **Step 8: Commit**
 
 ```bash
-git add .gitignore rust-toolchain.toml Cargo.toml Cargo.lock crates/engram-core
-git commit -m "chore: scaffold Cargo workspace + engram-core stub
+git add .gitignore rust-toolchain.toml Cargo.toml Cargo.lock crates/recall-core
+git commit -m "chore: scaffold Cargo workspace + recall-core stub
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
@@ -151,7 +151,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ```json
 {
-  "name": "engram-monorepo",
+  "name": "recall-monorepo",
   "private": true,
   "workspaces": ["packages/*", "apps/*"]
 }
@@ -161,7 +161,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ```json
 {
-  "name": "@engram/web",
+  "name": "@recall/web",
   "private": true,
   "type": "module",
   "scripts": {
@@ -195,7 +195,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Engram — teach your AI once</title>
+    <title>Recall — teach your AI once</title>
   </head>
   <body>
     <div id="root"></div>
@@ -211,7 +211,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
-// base: "/" for a custom domain; set PAGES_BASE="/engram/" for the project page.
+// base: "/" for a custom domain; set PAGES_BASE="/recall/" for the project page.
 export default defineConfig({
   base: process.env.PAGES_BASE ?? "/",
   plugins: [
@@ -262,7 +262,7 @@ createRoot(document.getElementById("root")!).render(
 export default function App() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-zinc-950 text-zinc-100">
-      <h1 className="text-4xl font-bold tracking-tight">Engram</h1>
+      <h1 className="text-4xl font-bold tracking-tight">Recall</h1>
       <p className="mt-3 text-zinc-400">
         Teach your AI once. It writes code like you — in every repo, every agent.
       </p>
@@ -314,7 +314,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - [ ] **Step 1: Create `justfile`**
 
 ```just
-# Engram monorepo task runner. Run `just` to list recipes.
+# Recall monorepo task runner. Run `just` to list recipes.
 
 default:
     @just --list
@@ -474,13 +474,13 @@ Then check the Actions run (`gh run watch` or the GitHub UI). Both `rust` and `w
 
 **Placeholder scan:** No TBD/TODO. Web pins are intentional (stability), with the upgrade path documented in Global Constraints.
 
-**Type consistency:** Workspace member path (`crates/engram-core`) matches Plan 1's expectations; `[workspace.dependencies]` versions match those Plan 1 Task 2+ consume. `apps/web` build output (`apps/web/dist`) matches the Plan 5 Pages deploy path.
+**Type consistency:** Workspace member path (`crates/recall-core`) matches Plan 1's expectations; `[workspace.dependencies]` versions match those Plan 1 Task 2+ consume. `apps/web` build output (`apps/web/dist`) matches the Plan 5 Pages deploy path.
 
 ---
 
 ## Execution Handoff
 
-Plan complete and saved to `docs/superpowers/plans/2026-06-28-engram-plan0-monorepo-scaffold.md`. Two execution options:
+Plan complete and saved to `docs/superpowers/plans/2026-06-28-recall-plan0-monorepo-scaffold.md`. Two execution options:
 
 **1. Subagent-Driven (recommended)** — fresh subagent per task, review between tasks.
 

@@ -1,4 +1,4 @@
-# Engram — Design Spec
+# Recall — Design Spec
 
 > Teach your AI once. It writes code like you in every repo, every branch, every agent.
 
@@ -10,7 +10,7 @@
 
 ## 1. What we're building
 
-Engram is a **personal convention brain for AI coding agents**. It learns how *you*
+Recall is a **personal convention brain for AI coding agents**. It learns how *you*
 like code written — your conventions, your corrections, your taste — and applies
 that knowledge automatically in **every repository, every branch, and every
 agent** (Claude Code, Codex, and beyond).
@@ -34,7 +34,7 @@ earns stars. It is the single feature the demo, README GIF, and launch all orbit
 
 The "memory for agents" space is crowded — mem0 (~60k★), agentmemory (~24k★),
 Supermemory (~28k★), Zep/Graphiti, cognee, Letta. But competitive research shows
-**nobody owns the exact intersection** Engram targets:
+**nobody owns the exact intersection** Recall targets:
 
 > **personal** (keyed to the developer, not the project)
 > × **cross-repo** × **cross-branch** × **cross-agent**
@@ -46,16 +46,16 @@ Supermemory (~28k★), Zep/Graphiti, cognee, Letta. But competitive research sho
 - **Supermemory** has the right *personal-convention scoping* (git-email = user
   scope) but only works in Claude Code + OpenCode — not cross-agent.
 
-The two leaders each hold *half* the wedge. Engram is the half nobody ships:
+The two leaders each hold *half* the wedge. Recall is the half nobody ships:
 **curated + universal-agent + branch-aware + (later) enforced.**
 
 Two technical gaps in the whole field become our moat:
 
 1. **Staleness / conflict.** Vector memories confidently inject last year's
-   convention. Engram models conventions with **temporal supersession** — a new
+   convention. Recall models conventions with **temporal supersession** — a new
    rule cleanly retires the old one.
 2. **Enforcement.** Even with perfect memory, agents treat rules as soft
-   suggestions ("ignored by message 8"). Engram's fast-follow turns retrieved
+   suggestions ("ignored by message 8"). Recall's fast-follow turns retrieved
    conventions into a `PreToolUse` gate that *blocks* violations.
 
 ---
@@ -76,7 +76,7 @@ Two technical gaps in the whole field become our moat:
 - **RAG / semantic search over a repo** (`repo.search`, `context_pack`,
   embeddings, `architecture_map`). This space is saturated (claude-context,
   repomix, aider). We do not compete here.
-- A chat UI. Engram has no conversation surface of its own.
+- A chat UI. Recall has no conversation surface of its own.
 - A cloud sync service or team/shared memory. MVP is single-developer, local.
   (Cloud sync is a possible future, not now.)
 - Running a local model. We use the agent CLIs as the LLM provider instead.
@@ -85,12 +85,12 @@ Two technical gaps in the whole field become our moat:
 
 ## 4. Architecture overview
 
-Engram is one Rust binary that operates in three modes, over one local store.
+Recall is one Rust binary that operates in three modes, over one local store.
 
 ```
                          ┌──────────────────────────────────────┐
    Claude Code  ─hooks──▶│                                        │
-   Codex        ─hooks──▶│   engram daemon / CLI (Rust, tokio)    │
+   Codex        ─hooks──▶│   recall daemon / CLI (Rust, tokio)    │
    any agent    ─MCP───▶ │                                        │
                          │  ┌──────────┐  ┌──────────────────┐   │
                          │  │ Capture  │  │ Inject (MCP +     │   │
@@ -107,22 +107,22 @@ Engram is one Rust binary that operates in three modes, over one local store.
                          │  │  Codex(`codex exec`) / ApiKey   │   │
                          │  └─────────────────────────────────┘  │
                          └──────────────────────────────────────┘
-                                   ~/.engram/  (SQLite + logs)
+                                   ~/.recall/  (SQLite + logs)
 ```
 
 ### Components (each independently understandable and testable)
 
 | Component | Responsibility | Depends on |
 |---|---|---|
-| `engram-core` | The convention domain model, scoping, supersession logic. Pure, no I/O. | nothing |
-| `engram-store` | SQLite persistence of conventions + provenance. | `engram-core`, `rusqlite` |
-| `engram-llm` | The `LlmProvider` trait + Claude/Codex/ApiKey backends (subprocess). | `tokio`, `serde_json` |
-| `engram-capture` | Distill sessions/corrections into candidate conventions; dedup/conflict-check. | core, store, llm |
-| `engram-inject` | Select relevant conventions for a context (repo/branch/lang) and render them. | core, store |
-| `engram-mcp` | MCP server exposing inject/inspect tools, built on `rmcp` (official Rust SDK). | inject, store, `rmcp` |
-| `engram-cli` | `engram` binary: daemon, hook entrypoints, and human inspection commands. | all of the above |
+| `recall-core` | The convention domain model, scoping, supersession logic. Pure, no I/O. | nothing |
+| `recall-store` | SQLite persistence of conventions + provenance. | `recall-core`, `rusqlite` |
+| `recall-llm` | The `LlmProvider` trait + Claude/Codex/ApiKey backends (subprocess). | `tokio`, `serde_json` |
+| `recall-capture` | Distill sessions/corrections into candidate conventions; dedup/conflict-check. | core, store, llm |
+| `recall-inject` | Select relevant conventions for a context (repo/branch/lang) and render them. | core, store |
+| `recall-mcp` | MCP server exposing inject/inspect tools, built on `rmcp` (official Rust SDK). | inject, store, `rmcp` |
+| `recall-cli` | `recall` binary: daemon, hook entrypoints, and human inspection commands. | all of the above |
 
-Boundaries: `engram-core` is pure logic (the hard part — scoping and
+Boundaries: `recall-core` is pure logic (the hard part — scoping and
 supersession — is unit-testable with no I/O). Each adapter (`store`, `llm`,
 `mcp`) hides one external dependency behind a trait so it can be faked in tests.
 
@@ -177,11 +177,11 @@ struct Provenance {
 **Supersession (the anti-staleness mechanism):** when a new convention conflicts
 with an existing active one in the same scope, the curator marks the old one
 `Superseded` (linked via `superseded_by`) rather than keeping both. Injection
-never serves `Superseded`/`Retired` rules. The history is preserved for `engram
+never serves `Superseded`/`Retired` rules. The history is preserved for `recall
 why`.
 
-Storage: SQLite at `~/.engram/engram.db`. Conventions are also exportable to/
-importable from plain Markdown (`~/.engram/conventions.md`) so the brain is
+Storage: SQLite at `~/.recall/recall.db`. Conventions are also exportable to/
+importable from plain Markdown (`~/.recall/conventions.md`) so the brain is
 human-portable and git-trackable if the user wants — addressing the "plain
 markdown vs SQLite" open question with **both** (SQLite is source of truth,
 Markdown is an export/import view).
@@ -194,7 +194,7 @@ Markdown is an export/import view).
 
 **Primary (automatic): session distillation.**
 - A `Stop` / session-end hook hands the daemon the session transcript path.
-- `engram-capture` sends the transcript to the `LlmProvider` with a strict
+- `recall-capture` sends the transcript to the `LlmProvider` with a strict
   JSON-schema prompt: *"Extract durable, personal coding conventions the user
   expressed or corrected. For each: the rule (imperative, <140 chars), a scope
   suggestion, tags, and the excerpt it came from. Ignore one-off task details."*
@@ -202,13 +202,13 @@ Markdown is an export/import view).
   conventions (lexical + a cheap LLM "is this the same/contradictory?" check).
   New → `Pending`; corroborates existing → raise confidence; contradicts → open
   a supersession.
-- `Pending` conventions are surfaced for one-tap confirmation (via `engram
+- `Pending` conventions are surfaced for one-tap confirmation (via `recall
   review` CLI and a notification), then promoted to `Active`. Auto-promote rules
   that reach a confidence threshold from repeated corroboration.
 
 **Secondary (manual): explicit teaching.**
-- `engram learn "always use early returns" --scope global` — instant `Active`.
-- A `/engram-learn` slash command (shipped in the plugin) for in-agent teaching.
+- `recall learn "always use early returns" --scope global` — instant `Active`.
+- A `/recall-learn` slash command (shipped in the plugin) for in-agent teaching.
 
 Manual teaching is the robust fallback that always works; session distillation is
 the magic. Both exist in MVP.
@@ -216,25 +216,25 @@ the magic. Both exist in MVP.
 ### 6.2 Inject
 
 - A **SessionStart hook** calls the daemon with cwd → daemon resolves git
-  remote + branch + detected languages → `engram-inject` selects the relevant
+  remote + branch + detected languages → `recall-inject` selects the relevant
   `Active` conventions (most-specific-scope-wins, capped to a token budget) →
   returns them as `additionalContext` the agent sees before its first action.
-- An **MCP tool** `engram_conventions(context)` lets the agent pull relevant
+- An **MCP tool** `recall_conventions(context)` lets the agent pull relevant
   rules on demand mid-session.
 - Injection is small and fresh: only relevant, only active, only what fits the
   budget. This is the antidote to a static, ever-growing, stale `CLAUDE.md`.
 
 ### 6.3 Inspect / Edit (memory must be auditable)
 
-CLI surface (`engram …`):
-- `engram list [--scope …] [--tag …]` — show active conventions.
-- `engram why <id|query>` — show provenance: where/when/how it was learned, and
+CLI surface (`recall …`):
+- `recall list [--scope …] [--tag …]` — show active conventions.
+- `recall why <id|query>` — show provenance: where/when/how it was learned, and
   what it superseded.
-- `engram review` — confirm/reject `Pending` conventions.
-- `engram learn "<rule>" [--scope …]` — manually add.
-- `engram forget <id>` — retire a convention.
-- `engram export [--md]` / `engram import <file>` — Markdown round-trip.
-- `engram status` — daemon + provider health, quota disclosure.
+- `recall review` — confirm/reject `Pending` conventions.
+- `recall learn "<rule>" [--scope …]` — manually add.
+- `recall forget <id>` — retire a convention.
+- `recall export [--md]` / `recall import <file>` — Markdown round-trip.
+- `recall status` — daemon + provider health, quota disclosure.
 
 ---
 
@@ -266,7 +266,7 @@ Backends (subprocess to the *official, unmodified* CLIs — the sanctioned path)
   (Anthropic forbids both).
 - Subscription-backed `claude -p` is **policy-volatile** — Anthropic announced,
   then paused, metering it onto a paid pool. So: provider selection is explicit,
-  the **ApiKeyBackend is a first-class fallback**, and `engram status`
+  the **ApiKeyBackend is a first-class fallback**, and `recall status`
   **discloses** that distillation consumes the user's Claude/Codex plan quota.
 - Provider auto-detection at startup: prefer an installed+authed CLI; degrade
   gracefully (manual teaching still works with no provider at all).
@@ -281,7 +281,7 @@ Backends (subprocess to the *official, unmodified* CLIs — the sanctioned path)
 One repository produces both plugins; the heavy artifact is shared.
 
 ```
-engram/
+recall/
 ├── crates/                         # the Rust workspace (core, store, llm, …)
 ├── npm/                            # cross-compiled binary published to npm
 ├── .claude-plugin/
@@ -290,8 +290,8 @@ engram/
 ├── .codex-plugin/
 │   └── plugin.json                 # Codex manifest (near-identical)
 ├── .agents/plugins/marketplace.json # Codex marketplace catalog
-├── skills/engram/SKILL.md          # SHARED verbatim by both hosts
-├── commands/                       # /engram-learn etc.
+├── skills/recall/SKILL.md          # SHARED verbatim by both hosts
+├── commands/                       # /recall-learn etc.
 ├── hooks/hooks.json                # SessionStart, Stop (+ PreToolUse fast-follow)
 └── .mcp.json                       # SHARED: launches the binary as MCP server
 ```
@@ -299,13 +299,13 @@ engram/
 - `SKILL.md` and `.mcp.json` use identical formats across Claude Code and Codex —
   authored once.
 - The Rust daemon is **cross-compiled and published to npm** (platform
-  sub-packages + JS shim); both `.mcp.json` files run `npx -y engram-mcp` (or a
-  scoped name if `engram` is taken). Alternative installs: `cargo install
-  engram`, Homebrew, and a `curl | sh` script.
+  sub-packages + JS shim); both `.mcp.json` files run `npx -y recall-mcp` (or a
+  scoped name if `recall` is taken). Alternative installs: `cargo install
+  recall`, Homebrew, and a `curl | sh` script.
 - Install is one line per host:
-  - Claude Code: `/plugin marketplace add tlgimenes/engram` →
-    `/plugin install engram@engram`
-  - Codex: `codex plugin marketplace add tlgimenes/engram` → install via
+  - Claude Code: `/plugin marketplace add tlgimenes/recall` →
+    `/plugin install recall@recall`
+  - Codex: `codex plugin marketplace add tlgimenes/recall` → install via
     `codex /plugins`
 - Pre-launch listings: MCP Registry, Anthropic plugin directory,
   awesome-claude-code, awesome-mcp-servers.
@@ -314,16 +314,16 @@ engram/
 
 ## 9. Testing strategy
 
-- **`engram-core`**: pure unit tests for scope resolution, conflict detection,
+- **`recall-core`**: pure unit tests for scope resolution, conflict detection,
   and supersession — the logic most likely to be subtly wrong. No I/O.
-- **`engram-store`**: tests against a temp SQLite db; round-trip + migration.
-- **`engram-llm`**: a `FakeProvider` for deterministic capture tests; a small set
+- **`recall-store`**: tests against a temp SQLite db; round-trip + migration.
+- **`recall-llm`**: a `FakeProvider` for deterministic capture tests; a small set
   of `#[ignore]` integration tests that actually shell to `claude`/`codex` when
   available in CI.
-- **`engram-capture`**: golden-transcript tests — given a recorded session,
+- **`recall-capture`**: golden-transcript tests — given a recorded session,
   assert the extracted conventions (using `FakeProvider` with canned output, plus
   schema-validation tests on real provider output).
-- **`engram-inject`**: given a store + a (repo, branch, lang) context, assert the
+- **`recall-inject`**: given a store + a (repo, branch, lang) context, assert the
   selected + ordered conventions and the token-budget cap.
 - **End-to-end**: a scripted scenario reproducing the launch demo (teach in repo
   A, inject in repo B) as an integration test — this *is* the product promise, so
@@ -331,9 +331,9 @@ engram/
 
 TDD throughout: tests precede implementation per the project's workflow.
 
-### 9.1 Development workflow: dogfood Engram as a local MCP server
+### 9.1 Development workflow: dogfood Recall as a local MCP server
 
-Engram is built by *using* Engram. The `engram-mcp` server (with at least a
+Recall is built by *using* Recall. The `recall-mcp` server (with at least a
 runnable stub answering `tools/list` and the inject/inspect tools) is an **early
 milestone**, not a final step, so we can register the local debug build as an MCP
 server on the developer's own Claude Code / Codex session and exercise the real
@@ -342,14 +342,14 @@ tools while building.
 Dev registration points the shipped `.mcp.json` schema at the local binary:
 
 ```jsonc
-// dev .mcp.json (or `claude mcp add engram -- ./target/debug/engram mcp`)
+// dev .mcp.json (or `claude mcp add recall -- ./target/debug/recall mcp`)
 { "mcpServers": {
-    "engram": { "command": "./target/debug/engram", "args": ["mcp"] }
+    "recall": { "command": "./target/debug/recall", "args": ["mcp"] }
 } }
 ```
 
 This gives a tight loop: implement a tool → rebuild → call it live in-session →
-assert behavior. The same config, repointed at `npx -y engram-mcp`, is what end
+assert behavior. The same config, repointed at `npx -y recall-mcp`, is what end
 users get — so dogfooding also continuously validates the real integration
 surface. Implication for the plan: bring up a thin end-to-end skeleton (store +
 one MCP tool) before fleshing out capture/curate, so there is something to
@@ -386,7 +386,7 @@ conventions, an inspection web UI.
 - Pre-list everywhere (MCP Registry, Anthropic plugin directory,
   awesome-claude-code) before launch day.
 - A recurring re-spike hook to manufacture (post-MVP): e.g. a public "convention
-  pack" gallery or a shareable `engram export`.
+  pack" gallery or a shareable `recall export`.
 
 ---
 
@@ -394,20 +394,20 @@ conventions, an inspection web UI.
 
 The original `README.md` framed "Repo Lens" as a broad local repo-intelligence
 layer (context packs, semantic search, architecture maps, many MCP tools). That
-surface is **saturated** and unfocused for a star-driven launch. Engram keeps the
+surface is **saturated** and unfocused for a star-driven launch. Recall keeps the
 original's best instincts — local-first, MCP-first, layered memory (global /
 project / branch), inspectable memory, deterministic git tooling, and *using
 stronger agents rather than competing with them* — and concentrates them into the
 one unowned wedge: the **personal, cross-repo, cross-branch, cross-agent, curated
 convention brain.** The README will be rewritten as the launch landing page.
 
-The GitHub repository will be renamed `repo-lens` → `engram`.
+The GitHub repository will be renamed `repo-lens` → `recall`.
 
 ---
 
 ## 13. Open questions (to resolve during planning)
 
-- Exact npm package name if `engram` is taken (`engram-cli`? scoped?).
+- Exact npm package name if `recall` is taken (`recall-cli`? scoped?).
 - Confidence threshold for auto-promoting `Pending` → `Active` without review.
 - How aggressive session distillation should be by default (privacy: it reads
   transcripts — must be local-only, opt-outable, and never sent anywhere except
