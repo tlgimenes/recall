@@ -19,16 +19,23 @@ pub fn parse_scope(s: &str) -> Result<Scope> {
     }
     if s == "repo" || s == "branch" {
         let ctx = detect_context(&std::env::current_dir()?);
-        let remote = ctx
-            .remote_id
-            .ok_or_else(|| anyhow!("not in a git repo with an 'origin' remote; can't use --scope {s}"))?;
+        let remote = ctx.remote_id.ok_or_else(|| {
+            anyhow!("not in a git repo with an 'origin' remote; can't use --scope {s}")
+        })?;
         if s == "repo" {
             return Ok(Scope::Repo { remote_id: remote });
         }
-        let branch = ctx.branch.ok_or_else(|| anyhow!("can't detect the current branch"))?;
-        return Ok(Scope::Branch { remote_id: remote, branch });
+        let branch = ctx
+            .branch
+            .ok_or_else(|| anyhow!("can't detect the current branch"))?;
+        return Ok(Scope::Branch {
+            remote_id: remote,
+            branch,
+        });
     }
-    Err(anyhow!("unknown scope '{s}': use global | repo | branch | language:<lang>"))
+    Err(anyhow!(
+        "unknown scope '{s}': use global | repo | branch | language:<lang>"
+    ))
 }
 
 fn short(id: &Uuid) -> String {
@@ -71,7 +78,12 @@ pub fn cmd_list(db: &Path) -> Result<String> {
     }
     let mut s = String::new();
     for c in &convs {
-        s.push_str(&format!("[{}] {} ({})\n", short(&c.id), c.rule, scope_label(&c.scope)));
+        s.push_str(&format!(
+            "[{}] {} ({})\n",
+            short(&c.id),
+            c.rule,
+            scope_label(&c.scope)
+        ));
     }
     Ok(s.trim_end().to_string())
 }
@@ -85,7 +97,9 @@ fn find_by_prefix(store: &Store, prefix: &str) -> Result<Convention> {
     match matches.len() {
         0 => Err(anyhow!("no convention matches id '{prefix}'")),
         1 => Ok(matches.into_iter().next().unwrap()),
-        n => Err(anyhow!("'{prefix}' is ambiguous ({n} matches); use more characters")),
+        n => Err(anyhow!(
+            "'{prefix}' is ambiguous ({n} matches); use more characters"
+        )),
     }
 }
 
@@ -103,8 +117,14 @@ pub fn cmd_why(db: &Path, id_prefix: &str) -> Result<String> {
     let mut s = String::new();
     s.push_str(&format!("[{}] {}\n", short(&c.id), c.rule));
     s.push_str(&format!("  scope:      {}\n", scope_label(&c.scope)));
-    s.push_str(&format!("  learned by: {}\n", source_label(&c.provenance.source)));
-    s.push_str(&format!("  learned at: {}\n", c.provenance.learned_at.to_rfc3339()));
+    s.push_str(&format!(
+        "  learned by: {}\n",
+        source_label(&c.provenance.source)
+    ));
+    s.push_str(&format!(
+        "  learned at: {}\n",
+        c.provenance.learned_at.to_rfc3339()
+    ));
     s.push_str(&format!("  status:     {:?}\n", c.status));
     s.push_str(&format!("  confidence: {:.2}", c.confidence));
     if let Some(by) = c.superseded_by {
@@ -138,7 +158,10 @@ mod tests {
     #[test]
     fn parse_scope_global_and_language() {
         assert_eq!(parse_scope("global").unwrap(), Scope::Global);
-        assert_eq!(parse_scope("language:rust").unwrap(), Scope::Language("rust".into()));
+        assert_eq!(
+            parse_scope("language:rust").unwrap(),
+            Scope::Language("rust".into())
+        );
     }
 
     #[test]
@@ -171,7 +194,10 @@ mod tests {
 
         let forget = cmd_forget(&db, id).unwrap();
         assert!(forget.to_lowercase().contains("retired"));
-        assert!(cmd_list(&db).unwrap().to_lowercase().contains("no conventions"));
+        assert!(cmd_list(&db)
+            .unwrap()
+            .to_lowercase()
+            .contains("no conventions"));
     }
 
     #[test]

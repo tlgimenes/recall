@@ -45,7 +45,9 @@ impl Store {
     }
 
     pub fn get(&self, id: Uuid) -> Result<Option<Convention>> {
-        let mut stmt = self.conn.prepare("SELECT data FROM conventions WHERE id = ?1")?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT data FROM conventions WHERE id = ?1")?;
         let mut rows = stmt.query(params![id.to_string()])?;
         match rows.next()? {
             Some(row) => {
@@ -116,18 +118,31 @@ fn status_str(s: &Status) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use recall_core::*;
     use chrono::Utc;
+    use recall_core::*;
     use uuid::Uuid;
 
     fn conv(rule: &str, scope: Scope) -> Convention {
         let now = Utc::now();
         Convention {
-            id: Uuid::new_v4(), rule: rule.into(), rationale: None, scope, tags: vec![],
-            provenance: Provenance { source: Source::ManualTeach, repo: None, branch: None,
-                agent: None, excerpt: None, learned_at: now },
-            status: Status::Active, superseded_by: None, confidence: 0.8,
-            created_at: now, updated_at: now,
+            id: Uuid::new_v4(),
+            rule: rule.into(),
+            rationale: None,
+            scope,
+            tags: vec![],
+            provenance: Provenance {
+                source: Source::ManualTeach,
+                repo: None,
+                branch: None,
+                agent: None,
+                excerpt: None,
+                learned_at: now,
+            },
+            status: Status::Active,
+            superseded_by: None,
+            confidence: 0.8,
+            created_at: now,
+            updated_at: now,
         }
     }
 

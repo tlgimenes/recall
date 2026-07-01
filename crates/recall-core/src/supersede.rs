@@ -3,7 +3,11 @@ use uuid::Uuid;
 
 /// Canonical form for comparing two rule strings.
 pub fn normalize_rule(s: &str) -> String {
-    s.trim().to_lowercase().split_whitespace().collect::<Vec<_>>().join(" ")
+    s.trim()
+        .to_lowercase()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Result of checking a new rule against existing active conventions.
@@ -42,8 +46,12 @@ mod tests {
             scope,
             tags: vec![],
             provenance: Provenance {
-                source: Source::ManualTeach, repo: None, branch: None,
-                agent: None, excerpt: None, learned_at: now,
+                source: Source::ManualTeach,
+                repo: None,
+                branch: None,
+                agent: None,
+                excerpt: None,
+                learned_at: now,
             },
             status: Status::Active,
             superseded_by: None,
@@ -55,7 +63,10 @@ mod tests {
 
     #[test]
     fn normalize_collapses_whitespace_and_case() {
-        assert_eq!(normalize_rule("  Use   Early  Returns "), "use early returns");
+        assert_eq!(
+            normalize_rule("  Use   Early  Returns "),
+            "use early returns"
+        );
     }
 
     #[test]
@@ -71,7 +82,11 @@ mod tests {
     fn dedup_treats_different_scope_as_new() {
         let existing = vec![conv("Use early returns", Scope::Global)];
         assert!(matches!(
-            dedup_decision("use early returns", &Scope::Language("rust".into()), &existing),
+            dedup_decision(
+                "use early returns",
+                &Scope::Language("rust".into()),
+                &existing
+            ),
             DedupDecision::New
         ));
     }

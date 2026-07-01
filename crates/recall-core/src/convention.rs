@@ -37,10 +37,19 @@ impl Scope {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Status { Pending, Active, Superseded, Retired }
+pub enum Status {
+    Pending,
+    Active,
+    Superseded,
+    Retired,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Source { SessionDistill, ManualTeach, ImportedRules }
+pub enum Source {
+    SessionDistill,
+    ManualTeach,
+    ImportedRules,
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Provenance {
@@ -91,10 +100,24 @@ mod tests {
     #[test]
     fn specificity_orders_global_to_branch() {
         assert!(Scope::Global.specificity() < Scope::Language("rust".into()).specificity());
-        assert!(Scope::Language("rust".into()).specificity()
-            < Scope::Repo { remote_id: "x".into() }.specificity());
-        assert!(Scope::Repo { remote_id: "x".into() }.specificity()
-            < Scope::Branch { remote_id: "x".into(), branch: "y".into() }.specificity());
+        assert!(
+            Scope::Language("rust".into()).specificity()
+                < Scope::Repo {
+                    remote_id: "x".into()
+                }
+                .specificity()
+        );
+        assert!(
+            Scope::Repo {
+                remote_id: "x".into()
+            }
+            .specificity()
+                < Scope::Branch {
+                    remote_id: "x".into(),
+                    branch: "y".into()
+                }
+                .specificity()
+        );
     }
 
     #[test]
@@ -110,13 +133,23 @@ mod tests {
 
     #[test]
     fn repo_and_branch_match_exactly() {
-        assert!(Scope::Repo { remote_id: "github.com/me/app".into() }.matches(&ctx()));
-        assert!(!Scope::Repo { remote_id: "github.com/me/other".into() }.matches(&ctx()));
+        assert!(Scope::Repo {
+            remote_id: "github.com/me/app".into()
+        }
+        .matches(&ctx()));
+        assert!(!Scope::Repo {
+            remote_id: "github.com/me/other".into()
+        }
+        .matches(&ctx()));
         assert!(Scope::Branch {
-            remote_id: "github.com/me/app".into(), branch: "main".into()
-        }.matches(&ctx()));
+            remote_id: "github.com/me/app".into(),
+            branch: "main".into()
+        }
+        .matches(&ctx()));
         assert!(!Scope::Branch {
-            remote_id: "github.com/me/app".into(), branch: "dev".into()
-        }.matches(&ctx()));
+            remote_id: "github.com/me/app".into(),
+            branch: "dev".into()
+        }
+        .matches(&ctx()));
     }
 }

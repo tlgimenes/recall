@@ -44,7 +44,11 @@ pub fn render(convs: &[Convention]) -> String {
     }
     let mut s = String::from("# Your coding conventions (via Recall)\n\n");
     for c in convs {
-        s.push_str(&format!("- {} _({})_\n", c.rule.trim(), scope_label(&c.scope)));
+        s.push_str(&format!(
+            "- {} _({})_\n",
+            c.rule.trim(),
+            scope_label(&c.scope)
+        ));
     }
     s
 }
@@ -62,18 +66,31 @@ pub fn scope_label(scope: &Scope) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use recall_core::*;
     use chrono::Utc;
+    use recall_core::*;
     use uuid::Uuid;
 
     fn conv(rule: &str, scope: Scope, conf: f32) -> Convention {
         let now = Utc::now();
         Convention {
-            id: Uuid::new_v4(), rule: rule.into(), rationale: None, scope, tags: vec![],
-            provenance: Provenance { source: Source::ManualTeach, repo: None, branch: None,
-                agent: None, excerpt: None, learned_at: now },
-            status: Status::Active, superseded_by: None, confidence: conf,
-            created_at: now, updated_at: now,
+            id: Uuid::new_v4(),
+            rule: rule.into(),
+            rationale: None,
+            scope,
+            tags: vec![],
+            provenance: Provenance {
+                source: Source::ManualTeach,
+                repo: None,
+                branch: None,
+                agent: None,
+                excerpt: None,
+                learned_at: now,
+            },
+            status: Status::Active,
+            superseded_by: None,
+            confidence: conf,
+            created_at: now,
+            updated_at: now,
         }
     }
 
@@ -90,8 +107,20 @@ mod tests {
         let convs = vec![
             conv("global rule", Scope::Global, 0.9),
             conv("rust rule", Scope::Language("rust".into()), 0.5),
-            conv("repo rule", Scope::Repo { remote_id: "github.com/me/app".into() }, 0.5),
-            conv("other repo", Scope::Repo { remote_id: "github.com/me/other".into() }, 0.9),
+            conv(
+                "repo rule",
+                Scope::Repo {
+                    remote_id: "github.com/me/app".into(),
+                },
+                0.5,
+            ),
+            conv(
+                "other repo",
+                Scope::Repo {
+                    remote_id: "github.com/me/other".into(),
+                },
+                0.9,
+            ),
         ];
         let out = select(&convs, &ctx(), 10_000);
         let rules: Vec<&str> = out.iter().map(|c| c.rule.as_str()).collect();
@@ -101,7 +130,13 @@ mod tests {
     #[test]
     fn select_respects_budget() {
         let convs = vec![
-            conv("aaaaaaaaaa", Scope::Repo { remote_id: "github.com/me/app".into() }, 0.9),
+            conv(
+                "aaaaaaaaaa",
+                Scope::Repo {
+                    remote_id: "github.com/me/app".into(),
+                },
+                0.9,
+            ),
             conv("bbbbbbbbbb", Scope::Global, 0.9),
         ];
         let out = select(&convs, &ctx(), 12);

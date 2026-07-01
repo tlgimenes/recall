@@ -53,6 +53,9 @@ pub struct ConventionsParams {
 #[derive(Clone)]
 pub struct Recall {
     db_path: Arc<PathBuf>,
+    // Read by the #[tool_handler] macro's generated dispatch code; the
+    // dead-code lint can't see that usage through the macro expansion.
+    #[allow(dead_code)]
     tool_router: ToolRouter<Recall>,
 }
 
@@ -79,7 +82,9 @@ impl Recall {
         Ok(CallToolResult::success(vec![Content::text(text)]))
     }
 
-    #[tool(description = "List all of the developer's active coding conventions across every scope.")]
+    #[tool(
+        description = "List all of the developer's active coding conventions across every scope."
+    )]
     fn recall_list(&self) -> Result<CallToolResult, McpError> {
         let text = handle_list(&self.db_path)
             .map_err(|e| McpError::internal_error(e.to_string(), None))?;
@@ -112,21 +117,33 @@ pub async fn run_stdio(db_path: PathBuf) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{handle_conventions, handle_list};
+    use chrono::Utc;
     use recall_core::*;
     use recall_store::Store;
-    use chrono::Utc;
     use uuid::Uuid;
 
     fn seed(db: &std::path::Path) {
         let store = Store::open(db).unwrap();
         let now = Utc::now();
         let c = Convention {
-            id: Uuid::new_v4(), rule: "Use early returns".into(), rationale: None,
-            scope: Scope::Global, tags: vec![],
-            provenance: Provenance { source: Source::ManualTeach, repo: None, branch: None,
-                agent: None, excerpt: None, learned_at: now },
-            status: Status::Active, superseded_by: None, confidence: 0.9,
-            created_at: now, updated_at: now,
+            id: Uuid::new_v4(),
+            rule: "Use early returns".into(),
+            rationale: None,
+            scope: Scope::Global,
+            tags: vec![],
+            provenance: Provenance {
+                source: Source::ManualTeach,
+                repo: None,
+                branch: None,
+                agent: None,
+                excerpt: None,
+                learned_at: now,
+            },
+            status: Status::Active,
+            superseded_by: None,
+            confidence: 0.9,
+            created_at: now,
+            updated_at: now,
         };
         store.add(&c).unwrap();
     }

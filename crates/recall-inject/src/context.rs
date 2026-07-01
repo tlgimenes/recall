@@ -11,16 +11,28 @@ pub fn detect_context(cwd: &Path) -> RepoContext {
     let branch = git(cwd, &["rev-parse", "--abbrev-ref", "HEAD"])
         .or_else(|| git(cwd, &["symbolic-ref", "--short", "HEAD"]));
     let languages = detect_languages(cwd);
-    RepoContext { remote_id, branch, languages }
+    RepoContext {
+        remote_id,
+        branch,
+        languages,
+    }
 }
 
 fn git(cwd: &Path, args: &[&str]) -> Option<String> {
-    let out = Command::new("git").current_dir(cwd).args(args).output().ok()?;
+    let out = Command::new("git")
+        .current_dir(cwd)
+        .args(args)
+        .output()
+        .ok()?;
     if !out.status.success() {
         return None;
     }
     let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    if s.is_empty() { None } else { Some(s) }
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
 }
 
 fn detect_languages(cwd: &Path) -> Vec<String> {
@@ -46,7 +58,11 @@ mod tests {
     use std::process::Command;
 
     fn git(dir: &std::path::Path, args: &[&str]) {
-        let ok = Command::new("git").current_dir(dir).args(args).output().unwrap();
+        let ok = Command::new("git")
+            .current_dir(dir)
+            .args(args)
+            .output()
+            .unwrap();
         assert!(ok.status.success(), "git {:?} failed", args);
     }
 
@@ -55,7 +71,10 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let dir = tmp.path();
         git(dir, &["init", "-q"]);
-        git(dir, &["remote", "add", "origin", "git@github.com:me/app.git"]);
+        git(
+            dir,
+            &["remote", "add", "origin", "git@github.com:me/app.git"],
+        );
         git(dir, &["checkout", "-q", "-b", "feature/x"]);
         std::fs::write(dir.join("Cargo.toml"), "[package]\nname=\"x\"\n").unwrap();
 

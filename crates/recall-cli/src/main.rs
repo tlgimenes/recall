@@ -3,7 +3,11 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(name = "recall", version, about = "Your personal coding-convention brain")]
+#[command(
+    name = "recall",
+    version,
+    about = "Your personal coding-convention brain"
+)]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,
