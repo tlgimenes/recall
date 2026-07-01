@@ -2,8 +2,10 @@ use anyhow::Result;
 use async_trait::async_trait;
 use serde_json::Value;
 
+pub mod apikey;
 pub mod claude;
 pub mod codex;
+pub mod detect;
 pub mod mock;
 
 /// A backend that performs one bounded, JSON-schema-constrained completion.
@@ -20,6 +22,8 @@ pub struct ProviderHealth {
     pub detail: String,
 }
 
+pub use apikey::AnthropicApiKey;
 pub use claude::ClaudeCli;
 pub use codex::CodexCli;
+pub use detect::detect;
 pub use mock::MockProvider;
