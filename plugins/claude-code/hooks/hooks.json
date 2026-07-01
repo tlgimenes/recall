@@ -8,6 +8,14 @@
         ]
       }
     ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          { "type": "command", "command": "npx -y @tlgimenes/recall hook pre-tool-use", "timeout": 65 }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [

@@ -73,3 +73,17 @@ Smoke test the loop:
 # tell Claude "always prefer early returns" -> it should call recall_learn
 ./target/debug/recall list   # confirm both rules are stored
 ```
+
+## Enforcement mode
+
+Recall checks edits against your conventions. Set the mode via `RECALL_ENFORCE`:
+
+- `warn` (default) — adds a heads-up but allows the edit
+- `block` — denies edits that violate a convention
+- `off` — disables the check
+
+```bash
+export RECALL_ENFORCE=block   # in your shell / agent env
+```
+
+The check fails open (allows) on any provider error, so it never wedges a session.

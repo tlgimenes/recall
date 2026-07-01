@@ -25,3 +25,9 @@ branch. Use it so your code matches their conventions without being told twice.
 - Prefer `global` scope for personal style that should follow the developer
   everywhere; use `repo`/`branch` only for project-specific rules.
 - Don't record one-off task details — only durable conventions.
+
+## Enforcement
+
+If an edit is blocked with a "violates your Recall conventions" reason, fix the
+code to satisfy the cited convention and retry — don't work around it. Conventions
+are the developer's explicit rules.
