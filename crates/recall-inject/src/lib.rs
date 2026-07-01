@@ -1,6 +1,9 @@
 mod context;
 pub use context::*;
 
+mod scope;
+pub use scope::*;
+
 use recall_core::{Convention, RepoContext, Scope, Status};
 
 /// Select the active conventions relevant to `ctx`, most-specific scope first,

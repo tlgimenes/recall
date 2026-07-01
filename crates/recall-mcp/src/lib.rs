@@ -36,6 +36,49 @@ pub fn handle_conventions(db_path: &Path, cwd: Option<&str>) -> Result<String> {
     Ok(non_empty(render(&selected)))
 }
 
+/// Plain, testable handler for the `recall_learn` tool.
+pub fn handle_learn(
+    db_path: &Path,
+    rule: &str,
+    scope: &str,
+    tags: Vec<String>,
+    cwd: Option<&str>,
+) -> Result<String> {
+    use chrono::Utc;
+    use recall_core::{Convention, Provenance, Source, Status};
+    use uuid::Uuid;
+
+    let store = Store::open(db_path)?;
+    let dir = match cwd {
+        Some(c) => PathBuf::from(c),
+        None => std::env::current_dir()?,
+    };
+    let scope = recall_inject::parse_scope(scope, &dir)?;
+    let now = Utc::now();
+    let c = Convention {
+        id: Uuid::new_v4(),
+        rule: rule.to_string(),
+        rationale: None,
+        scope,
+        tags,
+        provenance: Provenance {
+            source: Source::ManualTeach,
+            repo: None,
+            branch: None,
+            agent: None,
+            excerpt: None,
+            learned_at: now,
+        },
+        status: Status::Active,
+        superseded_by: None,
+        confidence: 0.8,
+        created_at: now,
+        updated_at: now,
+    };
+    store.add_curated(&c)?;
+    Ok(format!("Learned: {rule}"))
+}
+
 fn non_empty(s: String) -> String {
     if s.is_empty() {
         "No conventions recorded yet. Teach one with: recall learn \"...\"".to_string()
@@ -47,6 +90,18 @@ fn non_empty(s: String) -> String {
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 pub struct ConventionsParams {
     /// Working directory of the current repo. Defaults to the server's cwd.
+    pub cwd: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct LearnParams {
+    /// The convention, imperative and compact, e.g. "Import directly; no barrel files".
+    pub rule: String,
+    /// global | repo | branch | language:<lang>. Defaults to global.
+    pub scope: Option<String>,
+    /// Optional tags.
+    pub tags: Option<Vec<String>>,
+    /// Working directory (for repo/branch scope). Defaults to the server cwd.
     pub cwd: Option<String>,
 }
 
@@ -88,6 +143,24 @@ impl Recall {
     fn recall_list(&self) -> Result<CallToolResult, McpError> {
         let text = handle_list(&self.db_path)
             .map_err(|e| McpError::internal_error(e.to_string(), None))?;
+        Ok(CallToolResult::success(vec![Content::text(text)]))
+    }
+
+    #[tool(
+        description = "Record a durable coding convention the developer wants followed. Call this when they state a preference or correct you (e.g. 'always X', 'never Y', 'we use Z here')."
+    )]
+    fn recall_learn(
+        &self,
+        Parameters(p): Parameters<LearnParams>,
+    ) -> Result<CallToolResult, McpError> {
+        let text = handle_learn(
+            &self.db_path,
+            &p.rule,
+            p.scope.as_deref().unwrap_or("global"),
+            p.tags.unwrap_or_default(),
+            p.cwd.as_deref(),
+        )
+        .map_err(|e| McpError::internal_error(e.to_string(), None))?;
         Ok(CallToolResult::success(vec![Content::text(text)]))
     }
 }
@@ -174,5 +247,16 @@ mod tests {
         let db = tmp.path().join("recall.db");
         let out = handle_list(&db).unwrap();
         assert!(out.to_lowercase().contains("no conventions"));
+    }
+
+    #[test]
+    fn handle_learn_then_list_shows_rule() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = tmp.path().join("recall.db");
+        let msg = super::handle_learn(&db, "Use early returns", "global", vec![], None).unwrap();
+        assert!(msg.contains("Use early returns"));
+        assert!(super::handle_list(&db)
+            .unwrap()
+            .contains("Use early returns"));
     }
 }

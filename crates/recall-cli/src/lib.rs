@@ -2,43 +2,13 @@ use agent_cli::AgentProvider;
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
 use recall_capture::{contradicts, curate, extract};
-use recall_core::{Convention, Provenance, Scope, Source, Status};
-use recall_inject::{detect_context, scope_label};
+use recall_core::{Convention, Provenance, Source, Status};
+use recall_inject::scope_label;
 use recall_store::Store;
 use std::path::Path;
 use uuid::Uuid;
 
-/// Parse a `--scope` string into a Scope. `repo`/`branch` resolve from cwd git.
-pub fn parse_scope(s: &str) -> Result<Scope> {
-    if s == "global" {
-        return Ok(Scope::Global);
-    }
-    if let Some(lang) = s.strip_prefix("language:") {
-        if lang.is_empty() {
-            return Err(anyhow!("language scope needs a name, e.g. language:rust"));
-        }
-        return Ok(Scope::Language(lang.to_string()));
-    }
-    if s == "repo" || s == "branch" {
-        let ctx = detect_context(&std::env::current_dir()?);
-        let remote = ctx.remote_id.ok_or_else(|| {
-            anyhow!("not in a git repo with an 'origin' remote; can't use --scope {s}")
-        })?;
-        if s == "repo" {
-            return Ok(Scope::Repo { remote_id: remote });
-        }
-        let branch = ctx
-            .branch
-            .ok_or_else(|| anyhow!("can't detect the current branch"))?;
-        return Ok(Scope::Branch {
-            remote_id: remote,
-            branch,
-        });
-    }
-    Err(anyhow!(
-        "unknown scope '{s}': use global | repo | branch | language:<lang>"
-    ))
-}
+pub use recall_inject::parse_scope;
 
 fn short(id: &Uuid) -> String {
     id.to_string()[..8].to_string()
@@ -46,7 +16,7 @@ fn short(id: &Uuid) -> String {
 
 pub fn cmd_learn(db: &Path, rule: &str, scope: &str, tags: Vec<String>) -> Result<String> {
     let store = Store::open(db)?;
-    let scope = parse_scope(scope)?;
+    let scope = parse_scope(scope, &std::env::current_dir()?)?;
     let now = Utc::now();
     let c = Convention {
         id: Uuid::new_v4(),
@@ -243,16 +213,19 @@ mod tests {
 
     #[test]
     fn parse_scope_global_and_language() {
-        assert_eq!(parse_scope("global").unwrap(), Scope::Global);
         assert_eq!(
-            parse_scope("language:rust").unwrap(),
+            parse_scope("global", Path::new(".")).unwrap(),
+            Scope::Global
+        );
+        assert_eq!(
+            parse_scope("language:rust", Path::new(".")).unwrap(),
             Scope::Language("rust".into())
         );
     }
 
     #[test]
     fn parse_scope_rejects_unknown() {
-        assert!(parse_scope("nonsense").is_err());
+        assert!(parse_scope("nonsense", Path::new(".")).is_err());
     }
 
     #[test]
