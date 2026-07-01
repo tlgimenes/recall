@@ -1,0 +1,8 @@
+{
+  "name": "recall",
+  "version": "0.1.0",
+  "description": "Your personal coding-convention brain: teach your AI once, it writes code like you in every repo and every agent.",
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "hooks": "./hooks/hooks.json"
+}
