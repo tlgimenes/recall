@@ -1,5 +1,7 @@
-use anyhow::{anyhow, Result};
+use agent_cli::AgentProvider;
+use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
+use recall_capture::{curate, extract};
 use recall_core::{Convention, Provenance, Scope, Source, Status};
 use recall_inject::{detect_context, scope_label};
 use recall_store::Store;
@@ -144,10 +146,82 @@ pub fn cmd_status(db: &Path) -> Result<String> {
     let store = Store::open(db)?;
     let active = store.active()?.len();
     let total = store.all()?.len();
+    let provider = match agent_cli::detect() {
+        Some(p) => p.name().to_string(),
+        None => "none (install Claude Code or Codex, or set ANTHROPIC_API_KEY)".to_string(),
+    };
     Ok(format!(
-        "Recall\n  db:       {}\n  active:   {active}\n  total:    {total}\n  provider: not configured (LLM capture arrives in Plan 2)",
+        "Recall\n  db:       {}\n  active:   {active}\n  total:    {total}\n  provider: {provider}",
         db.display()
     ))
+}
+
+pub async fn cmd_capture(
+    db: &Path,
+    transcript_path: &Path,
+    ctx: &recall_core::RepoContext,
+    provider: &dyn AgentProvider,
+) -> Result<String> {
+    let transcript = std::fs::read_to_string(transcript_path)
+        .with_context(|| format!("reading transcript {}", transcript_path.display()))?;
+    let store = Store::open(db)?;
+    let candidates = extract(&transcript, provider).await?;
+    let report = curate(&candidates, &store, ctx, provider).await?;
+    Ok(format!(
+        "Captured: {} new (pending review), {} corroborated, {} potential conflicts.",
+        report.added.len(),
+        report.corroborated.len(),
+        report.conflicts.len()
+    ))
+}
+
+pub fn cmd_review_list(db: &Path) -> Result<String> {
+    let store = Store::open(db)?;
+    let pending: Vec<_> = store
+        .all()?
+        .into_iter()
+        .filter(|c| c.status == Status::Pending)
+        .collect();
+    if pending.is_empty() {
+        return Ok("No pending conventions to review.".to_string());
+    }
+    let mut s = String::from("Pending review (recall review --accept <id> | --reject <id>):\n");
+    for c in &pending {
+        s.push_str(&format!(
+            "[{}] {} ({})\n",
+            short(&c.id),
+            c.rule,
+            scope_label(&c.scope)
+        ));
+    }
+    Ok(s.trim_end().to_string())
+}
+
+pub fn cmd_review_accept(db: &Path, id_prefix: &str) -> Result<String> {
+    let store = Store::open(db)?;
+    let mut c = find_by_prefix(&store, id_prefix)?;
+    // Retire any same-scope active rule with a different normalized text (supersession).
+    let n = recall_core::normalize_rule(&c.rule);
+    for e in store.active()? {
+        if e.scope == c.scope && recall_core::normalize_rule(&e.rule) != n {
+            let mut sup = e.clone();
+            sup.status = Status::Superseded;
+            sup.superseded_by = Some(c.id);
+            store.add(&sup)?;
+        }
+    }
+    c.status = Status::Active;
+    c.confidence = c.confidence.max(0.8);
+    store.add(&c)?;
+    Ok(format!("Accepted [{}]: {}", short(&c.id), c.rule))
+}
+
+pub fn cmd_review_reject(db: &Path, id_prefix: &str) -> Result<String> {
+    let store = Store::open(db)?;
+    let mut c = find_by_prefix(&store, id_prefix)?;
+    c.status = Status::Retired;
+    store.add(&c)?;
+    Ok(format!("Rejected [{}]: {}", short(&c.id), c.rule))
 }
 
 #[cfg(test)]
@@ -208,5 +282,59 @@ mod tests {
         let status = cmd_status(&db).unwrap();
         assert!(status.contains("1"));
         assert!(status.to_lowercase().contains("active"));
+    }
+
+    #[tokio::test]
+    async fn capture_then_review_accept_promotes() {
+        use agent_cli::MockProvider;
+        use serde_json::json;
+        let tmp = tempfile::tempdir().unwrap();
+        let db = tmp.path().join("recall.db");
+        let transcript = tmp.path().join("t.txt");
+        std::fs::write(&transcript, "user: always use early returns").unwrap();
+
+        let extractor = MockProvider::new(json!({"conventions":[
+            {"rule":"Use early returns","scope":"global","tags":[]}
+        ]}));
+        let ctx = recall_core::RepoContext::default();
+        let msg = cmd_capture(&db, &transcript, &ctx, &extractor)
+            .await
+            .unwrap();
+        assert!(msg.to_lowercase().contains("1"));
+
+        let pending = cmd_review_list(&db).unwrap();
+        assert!(pending.contains("Use early returns"));
+        let id = &pending[pending.find('[').unwrap() + 1..pending.find(']').unwrap()];
+
+        let accepted = cmd_review_accept(&db, id).unwrap();
+        assert!(accepted.to_lowercase().contains("accept"));
+        assert!(cmd_list(&db).unwrap().contains("Use early returns")); // now Active
+    }
+
+    #[tokio::test]
+    async fn review_reject_retires_pending() {
+        use agent_cli::MockProvider;
+        use serde_json::json;
+        let tmp = tempfile::tempdir().unwrap();
+        let db = tmp.path().join("recall.db");
+        let transcript = tmp.path().join("t.txt");
+        std::fs::write(&transcript, "x").unwrap();
+        let extractor =
+            MockProvider::new(json!({"conventions":[{"rule":"Nope","scope":"global","tags":[]}]}));
+        cmd_capture(
+            &db,
+            &transcript,
+            &recall_core::RepoContext::default(),
+            &extractor,
+        )
+        .await
+        .unwrap();
+        let pending = cmd_review_list(&db).unwrap();
+        let id = &pending[pending.find('[').unwrap() + 1..pending.find(']').unwrap()];
+        cmd_review_reject(&db, id).unwrap();
+        assert!(cmd_review_list(&db)
+            .unwrap()
+            .to_lowercase()
+            .contains("no pending"));
     }
 }

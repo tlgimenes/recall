@@ -997,13 +997,16 @@ dependencies = [
 name = "recall-cli"
 version = "0.1.0"
 dependencies = [
+ "agent-cli",
  "anyhow",
  "chrono",
  "clap",
+ "recall-capture",
  "recall-core",
  "recall-inject",
  "recall-mcp",
  "recall-store",
+ "serde_json",
  "tempfile",
  "tokio",
  "uuid",

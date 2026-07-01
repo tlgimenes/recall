@@ -19,6 +19,8 @@ recall-core = { path = "../recall-core" }
 recall-store = { path = "../recall-store" }
 recall-inject = { path = "../recall-inject" }
 recall-mcp = { path = "../recall-mcp" }
+recall-capture = { path = "../recall-capture" }
+agent-cli = { path = "../agent-cli" }
 clap = { version = "4", features = ["derive"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-std"] }
 chrono = { workspace = true }
@@ -27,3 +29,4 @@ anyhow = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+serde_json = { workspace = true }

@@ -42,6 +42,20 @@ enum Cmd {
     },
     /// Show Recall status
     Status,
+    /// Capture conventions from a session transcript (used by the Stop hook)
+    Capture {
+        /// Path to the session transcript file
+        transcript: String,
+    },
+    /// Review pending conventions
+    Review {
+        /// Accept a pending convention by id (or prefix)
+        #[arg(long)]
+        accept: Option<String>,
+        /// Reject a pending convention by id (or prefix)
+        #[arg(long)]
+        reject: Option<String>,
+    },
 }
 
 fn db_path() -> PathBuf {
@@ -65,6 +79,30 @@ async fn main() -> Result<()> {
         Cmd::Why { id } => println!("{}", recall_cli::cmd_why(&db, &id)?),
         Cmd::Forget { id } => println!("{}", recall_cli::cmd_forget(&db, &id)?),
         Cmd::Status => println!("{}", recall_cli::cmd_status(&db)?),
+        Cmd::Capture { transcript } => {
+            let provider = agent_cli::detect()
+                .ok_or_else(|| anyhow::anyhow!("no LLM provider; install Claude Code or Codex"))?;
+            let ctx = recall_inject::detect_context(&std::env::current_dir()?);
+            println!(
+                "{}",
+                recall_cli::cmd_capture(
+                    &db,
+                    std::path::Path::new(&transcript),
+                    &ctx,
+                    provider.as_ref()
+                )
+                .await?
+            );
+        }
+        Cmd::Review { accept, reject } => {
+            if let Some(id) = accept {
+                println!("{}", recall_cli::cmd_review_accept(&db, &id)?);
+            } else if let Some(id) = reject {
+                println!("{}", recall_cli::cmd_review_reject(&db, &id)?);
+            } else {
+                println!("{}", recall_cli::cmd_review_list(&db)?);
+            }
+        }
     }
     Ok(())
 }
