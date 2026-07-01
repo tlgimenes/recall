@@ -80,8 +80,11 @@ impl AgentProvider for CodexCli {
             .spawn()
             .with_context(|| "failed to spawn `codex` (is Codex installed?)")?;
         if let Some(mut stdin) = child.stdin.take() {
-            stdin.write_all(prompt.as_bytes()).await?;
-            stdin.shutdown().await?;
+            let prompt = prompt.to_string();
+            tokio::spawn(async move {
+                let _ = stdin.write_all(prompt.as_bytes()).await;
+                let _ = stdin.shutdown().await;
+            });
         }
         let out = tokio::time::timeout(self.timeout, child.wait_with_output())
             .await
