@@ -140,6 +140,23 @@ async fn main() -> Result<()> {
                         }
                     }
                 }
+                "pre-tool-use" => {
+                    let mode = recall_cli::EnforceMode::from_env();
+                    if mode != recall_cli::EnforceMode::Off {
+                        if let Some(provider) = agent_cli::detect() {
+                            if let Some(out) = recall_cli::cmd_hook_pre_tool_use(
+                                &db,
+                                &input,
+                                mode,
+                                provider.as_ref(),
+                            )
+                            .await?
+                            {
+                                println!("{out}");
+                            }
+                        }
+                    }
+                }
                 other => eprintln!("unknown hook event: {other}"),
             }
         }

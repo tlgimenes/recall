@@ -206,7 +206,121 @@ pub fn cmd_review_reject(db: &Path, id_prefix: &str) -> Result<String> {
     Ok(format!("Rejected [{}]: {}", short(&c.id), c.rule))
 }
 
+use recall_capture::{check, Violation};
 use serde_json::{json, Value};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EnforceMode {
+    Off,
+    Warn,
+    Block,
+}
+
+impl EnforceMode {
+    pub fn from_env() -> Self {
+        match std::env::var("RECALL_ENFORCE").as_deref() {
+            Ok("block") => EnforceMode::Block,
+            Ok("off") => EnforceMode::Off,
+            _ => EnforceMode::Warn, // default
+        }
+    }
+}
+
+/// Pull the proposed file path + content from an edit tool's input. None for non-edit tools.
+pub fn extract_proposed(tool_name: &str, tool_input: &Value) -> Option<(Option<String>, String)> {
+    let is_edit = matches!(tool_name, "Write" | "Edit" | "MultiEdit" | "apply_patch");
+    if !is_edit {
+        return None;
+    }
+    let path = tool_input
+        .get("file_path")
+        .and_then(|p| p.as_str())
+        .map(String::from);
+    let content = tool_input
+        .get("content")
+        .or_else(|| tool_input.get("new_string"))
+        .or_else(|| tool_input.get("file_text"))
+        .or_else(|| tool_input.get("input")) // apply_patch
+        .and_then(|c| c.as_str())
+        .map(String::from)?;
+    Some((path, content))
+}
+
+/// Build the hook output JSON for the given violations + mode (None = stay silent / allow).
+pub fn pre_tool_use_decision(violations: &[Violation], mode: EnforceMode) -> Option<String> {
+    if violations.is_empty() || mode == EnforceMode::Off {
+        return None;
+    }
+    let summary = violations
+        .iter()
+        .map(|v| format!("• {} — {}", v.rule, v.explanation))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let out = match mode {
+        EnforceMode::Block => json!({
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "deny",
+                "permissionDecisionReason": format!("This edit violates your Recall conventions:\n{summary}")
+            }
+        }),
+        EnforceMode::Warn => json!({
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "additionalContext": format!("Heads up — this edit may violate your conventions:\n{summary}")
+            }
+        }),
+        EnforceMode::Off => return None,
+    };
+    Some(out.to_string())
+}
+
+pub async fn cmd_hook_pre_tool_use(
+    db: &Path,
+    stdin_json: &str,
+    mode: EnforceMode,
+    provider: &dyn AgentProvider,
+) -> Result<Option<String>> {
+    if mode == EnforceMode::Off {
+        return Ok(None);
+    }
+    let v: Value = serde_json::from_str(stdin_json).unwrap_or(json!({}));
+    let tool_name = v.get("tool_name").and_then(|t| t.as_str()).unwrap_or("");
+    let tool_input = v.get("tool_input").cloned().unwrap_or(json!({}));
+    let (path, content) = match extract_proposed(tool_name, &tool_input) {
+        Some(x) => x,
+        None => return Ok(None), // not an edit; allow
+    };
+    let cwd = v
+        .get("cwd")
+        .and_then(|c| c.as_str())
+        .map(std::path::PathBuf::from)
+        .unwrap_or(std::env::current_dir()?);
+    let store = Store::open(db)?;
+    let mut ctx = recall_inject::detect_context(&cwd);
+    // Narrow languages by the edited file extension when present.
+    if let Some(p) = &path {
+        if let Some(lang) = lang_for_path(p) {
+            ctx.languages = vec![lang];
+        }
+    }
+    let convs = recall_inject::select(&store.active()?, &ctx, 4000);
+    let violations = check(&content, &convs, provider).await.unwrap_or_default(); // fail open
+    Ok(pre_tool_use_decision(&violations, mode))
+}
+
+fn lang_for_path(p: &str) -> Option<String> {
+    let ext = std::path::Path::new(p).extension()?.to_str()?;
+    let l = match ext {
+        "rs" => "rust",
+        "ts" | "tsx" => "typescript",
+        "js" | "jsx" => "javascript",
+        "py" => "python",
+        "go" => "go",
+        _ => return None,
+    };
+    Some(l.to_string())
+}
 
 /// SessionStart hook: emit the injection JSON (or "" if nothing relevant).
 pub fn hook_session_start(db: &Path, stdin_json: &str) -> Result<String> {
@@ -431,5 +545,55 @@ mod tests {
         );
         assert_eq!(hook_stop_transcript(r#"{"transcript_path":null}"#), None);
         assert_eq!(hook_stop_transcript(r#"{}"#), None);
+    }
+
+    #[test]
+    fn extract_proposed_handles_write_and_edit() {
+        let (p, c) = extract_proposed(
+            "Write",
+            &serde_json::json!({"file_path":"a.ts","content":"x"}),
+        )
+        .unwrap();
+        assert_eq!(p.as_deref(), Some("a.ts"));
+        assert_eq!(c, "x");
+        let (_, c2) = extract_proposed(
+            "Edit",
+            &serde_json::json!({"file_path":"a.ts","new_string":"y"}),
+        )
+        .unwrap();
+        assert_eq!(c2, "y");
+        assert!(extract_proposed("Bash", &serde_json::json!({"command":"ls"})).is_none());
+    }
+
+    #[test]
+    fn decision_block_denies_when_violations() {
+        let v = vec![Violation {
+            rule: "No barrels".into(),
+            explanation: "re-export".into(),
+        }];
+        let out = pre_tool_use_decision(&v, EnforceMode::Block).unwrap();
+        assert!(out.contains("\"permissionDecision\":\"deny\""));
+        assert!(out.contains("No barrels"));
+    }
+
+    #[test]
+    fn decision_warn_allows_with_context() {
+        let v = vec![Violation {
+            rule: "No barrels".into(),
+            explanation: "re-export".into(),
+        }];
+        let out = pre_tool_use_decision(&v, EnforceMode::Warn).unwrap();
+        assert!(out.contains("additionalContext"));
+        assert!(!out.contains("deny"));
+    }
+
+    #[test]
+    fn decision_none_when_no_violations_or_off() {
+        assert!(pre_tool_use_decision(&[], EnforceMode::Block).is_none());
+        let v = vec![Violation {
+            rule: "x".into(),
+            explanation: "y".into(),
+        }];
+        assert!(pre_tool_use_decision(&v, EnforceMode::Off).is_none());
     }
 }
