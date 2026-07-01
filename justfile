@@ -39,3 +39,13 @@ web-dev:
 
 # What CI runs
 ci: lint test build-web
+
+# Copy the canonical skills into each plugin (run after editing /skills)
+sync-plugins:
+    rm -rf plugins/claude-code/skills plugins/codex/skills
+    cp -R skills plugins/claude-code/skills
+    cp -R skills plugins/codex/skills
+
+# CI: fail if the synced skills have drifted from /skills
+sync-plugins-check: sync-plugins
+    git diff --exit-code -- plugins/claude-code/skills plugins/codex/skills

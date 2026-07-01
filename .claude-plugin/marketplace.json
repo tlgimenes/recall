@@ -1,0 +1,11 @@
+{
+  "name": "recall",
+  "owner": { "name": "tlgimenes", "url": "https://github.com/tlgimenes" },
+  "plugins": [
+    {
+      "name": "recall",
+      "source": "./plugins/claude-code",
+      "description": "Your personal coding-convention brain for Claude Code."
+    }
+  ]
+}

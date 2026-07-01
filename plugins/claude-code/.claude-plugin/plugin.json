@@ -1,0 +1,11 @@
+{
+  "name": "recall",
+  "displayName": "Recall",
+  "version": "0.1.0",
+  "description": "Your personal coding-convention brain: teach your AI once, it writes code like you in every repo and every agent.",
+  "author": { "name": "tlgimenes" },
+  "homepage": "https://github.com/tlgimenes/recall",
+  "repository": "https://github.com/tlgimenes/recall",
+  "license": "MIT",
+  "keywords": ["mcp", "memory", "conventions", "context", "productivity"]
+}
