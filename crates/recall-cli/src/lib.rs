@@ -236,6 +236,23 @@ pub fn extract_proposed(tool_name: &str, tool_input: &Value) -> Option<(Option<S
         .get("file_path")
         .and_then(|p| p.as_str())
         .map(String::from);
+    // MultiEdit nests its edits as tool_input.edits[], each with its own
+    // new_string -- there is no top-level new_string for MultiEdit calls.
+    // Concatenate every edit's proposed new_string so the full set of
+    // changes in the call gets checked.
+    if tool_name == "MultiEdit" {
+        if let Some(edits) = tool_input.get("edits").and_then(|e| e.as_array()) {
+            let joined = edits
+                .iter()
+                .filter_map(|e| e.get("new_string").and_then(|s| s.as_str()))
+                .collect::<Vec<_>>()
+                .join("\n");
+            if !joined.is_empty() {
+                return Some((path, joined));
+            }
+        }
+        return None; // malformed/missing edits; nothing to check
+    }
     let content = tool_input
         .get("content")
         .or_else(|| tool_input.get("new_string"))
@@ -275,7 +292,26 @@ pub fn pre_tool_use_decision(violations: &[Violation], mode: EnforceMode) -> Opt
     Some(out.to_string())
 }
 
+/// PreToolUse hook: check a proposed edit against active conventions and
+/// report a decision (deny/warn) for the host to act on.
+///
+/// This function never returns `Err`: any internal failure (stdin parsing,
+/// missing cwd, DB open/read errors, provider errors, ...) degrades to
+/// `Ok(None)` -- i.e. "print nothing, allow the edit" -- so it can never wedge
+/// a developer's live session. `Ok(Some(json))` is returned only when there
+/// is an actual decision (deny or warn) to report.
 pub async fn cmd_hook_pre_tool_use(
+    db: &Path,
+    stdin_json: &str,
+    mode: EnforceMode,
+    provider: &dyn AgentProvider,
+) -> Result<Option<String>> {
+    Ok(cmd_hook_pre_tool_use_inner(db, stdin_json, mode, provider)
+        .await
+        .unwrap_or(None))
+}
+
+async fn cmd_hook_pre_tool_use_inner(
     db: &Path,
     stdin_json: &str,
     mode: EnforceMode,
@@ -566,6 +602,37 @@ mod tests {
     }
 
     #[test]
+    fn extract_proposed_handles_multi_edit_nested_edits() {
+        // Claude Code's real MultiEdit schema nests edits as tool_input.edits[],
+        // each with its own old_string/new_string -- there is no top-level
+        // new_string for MultiEdit calls.
+        let (p, c) = extract_proposed(
+            "MultiEdit",
+            &serde_json::json!({
+                "file_path": "a.ts",
+                "edits": [
+                    {"old_string": "foo", "new_string": "bar the first edit"},
+                    {"old_string": "baz", "new_string": "qux the second edit"}
+                ]
+            }),
+        )
+        .unwrap();
+        assert_eq!(p.as_deref(), Some("a.ts"));
+        assert!(c.contains("bar the first edit"));
+        assert!(c.contains("qux the second edit"));
+    }
+
+    #[test]
+    fn extract_proposed_multi_edit_missing_edits_returns_none() {
+        assert!(extract_proposed("MultiEdit", &serde_json::json!({"file_path":"a.ts"})).is_none());
+        assert!(extract_proposed(
+            "MultiEdit",
+            &serde_json::json!({"file_path":"a.ts","edits":[]})
+        )
+        .is_none());
+    }
+
+    #[test]
     fn decision_block_denies_when_violations() {
         let v = vec![Violation {
             rule: "No barrels".into(),
@@ -595,5 +662,38 @@ mod tests {
             explanation: "y".into(),
         }];
         assert!(pre_tool_use_decision(&v, EnforceMode::Off).is_none());
+    }
+
+    #[tokio::test]
+    async fn hook_pre_tool_use_fails_open_when_store_open_fails() {
+        use agent_cli::MockProvider;
+
+        // Force Store::open to fail: `db`'s parent path component is a
+        // regular file, not a directory, so `create_dir_all` cannot create
+        // it and `Connection::open` then fails because the directory does
+        // not exist. This simulates DB corruption / disk full / a bogus
+        // path -- none of which should ever wedge the hook.
+        let blocking_file = tempfile::NamedTempFile::new().unwrap();
+        let db = blocking_file.path().join("sub").join("recall.db");
+        assert!(
+            Store::open(&db).is_err(),
+            "test setup invalid: Store::open unexpectedly succeeded for {}",
+            db.display()
+        );
+
+        let provider = MockProvider::new(json!({"violations": []}));
+        let stdin = serde_json::json!({
+            "tool_name": "Write",
+            "tool_input": {"file_path": "a.rs", "content": "fn main() {}"},
+            "cwd": "/tmp"
+        })
+        .to_string();
+
+        let result = cmd_hook_pre_tool_use(&db, &stdin, EnforceMode::Block, &provider).await;
+        assert!(
+            result.is_ok(),
+            "cmd_hook_pre_tool_use must never propagate Err, got {result:?}"
+        );
+        assert_eq!(result.unwrap(), None);
     }
 }
