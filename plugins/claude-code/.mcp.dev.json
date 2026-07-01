@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "recall": {
+      "command": "./target/debug/recall",
+      "args": ["mcp"]
+    }
+  }
+}

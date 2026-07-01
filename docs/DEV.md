@@ -42,3 +42,34 @@ Use a throwaway DB while experimenting:
 RECALL_DB=/tmp/recall-dev.db ./target/debug/recall learn "..." 
 RECALL_DB=/tmp/recall-dev.db ./target/debug/recall list
 ```
+
+## Dogfooding the full plugin (before npm publish)
+
+The shipped plugin runs `npx -y @tlgimenes/recall` (published in Plan 4). Until
+then, dogfood against the local debug binary:
+
+```bash
+cargo build
+
+# Option A: register just the MCP server at the local binary (fast loop)
+claude mcp add recall -- ./target/debug/recall mcp
+
+# Option B: install the whole plugin from the local marketplace, then
+# temporarily point its MCP at the debug binary by copying the dev variant:
+cp plugins/claude-code/.mcp.dev.json plugins/claude-code/.mcp.json   # local only; don't commit
+claude plugin marketplace add .
+claude plugin install recall@recall
+```
+
+For the hooks to use the local binary during dev, add to `~/.claude/settings.json`
+(SessionStart/Stop) pointing `command` at `./target/debug/recall hook ...`, or
+ensure `recall` is on PATH (`cargo install --path crates/recall-cli`).
+
+Smoke test the loop:
+
+```bash
+./target/debug/recall learn "Import directly; no barrel files" --scope global
+# new Claude Code session in this repo -> the SessionStart hook injects the rule
+# tell Claude "always prefer early returns" -> it should call recall_learn
+./target/debug/recall list   # confirm both rules are stored
+```
