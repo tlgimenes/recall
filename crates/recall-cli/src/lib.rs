@@ -206,6 +206,43 @@ pub fn cmd_review_reject(db: &Path, id_prefix: &str) -> Result<String> {
     Ok(format!("Rejected [{}]: {}", short(&c.id), c.rule))
 }
 
+use serde_json::{json, Value};
+
+/// SessionStart hook: emit the injection JSON (or "" if nothing relevant).
+pub fn hook_session_start(db: &Path, stdin_json: &str) -> Result<String> {
+    let v: Value = serde_json::from_str(stdin_json).unwrap_or(json!({}));
+    let cwd = match v.get("cwd").and_then(|c| c.as_str()) {
+        Some(c) => std::path::PathBuf::from(c),
+        None => std::env::current_dir()?,
+    };
+    let store = Store::open(db)?;
+    let convs = store.active()?;
+    let ctx = recall_inject::detect_context(&cwd);
+    let selected = recall_inject::select(&convs, &ctx, 4000);
+    let rendered = recall_inject::render(&selected);
+    if rendered.is_empty() {
+        return Ok(String::new());
+    }
+    Ok(serde_json::to_string(&json!({
+        "hookSpecificOutput": {
+            "hookEventName": "SessionStart",
+            "additionalContext": rendered
+        }
+    }))?)
+}
+
+/// Stop hook: extract a usable transcript path (None for Codex's null / missing).
+pub fn hook_stop_transcript(stdin_json: &str) -> Option<String> {
+    serde_json::from_str::<Value>(stdin_json)
+        .ok()
+        .and_then(|v| {
+            v.get("transcript_path")
+                .and_then(|t| t.as_str())
+                .map(String::from)
+        })
+        .filter(|s| !s.is_empty())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -361,5 +398,38 @@ mod tests {
             .unwrap()
             .to_lowercase()
             .contains("no pending"));
+    }
+
+    #[test]
+    fn hook_session_start_injects_active_conventions() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = tmp.path().join("recall.db");
+        cmd_learn(&db, "Use early returns", "global", vec![]).unwrap();
+        let stdin = format!(
+            r#"{{"cwd":"{}","hook_event_name":"SessionStart"}}"#,
+            tmp.path().display()
+        );
+        let out = hook_session_start(&db, &stdin).unwrap();
+        assert!(out.contains("hookSpecificOutput"));
+        assert!(out.contains("SessionStart"));
+        assert!(out.contains("Use early returns"));
+    }
+
+    #[test]
+    fn hook_session_start_empty_when_no_conventions() {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = tmp.path().join("recall.db");
+        let out = hook_session_start(&db, r#"{"cwd":"/tmp"}"#).unwrap();
+        assert_eq!(out, "");
+    }
+
+    #[test]
+    fn hook_stop_transcript_extracts_path_and_handles_null() {
+        assert_eq!(
+            hook_stop_transcript(r#"{"transcript_path":"/tmp/t.jsonl"}"#).as_deref(),
+            Some("/tmp/t.jsonl")
+        );
+        assert_eq!(hook_stop_transcript(r#"{"transcript_path":null}"#), None);
+        assert_eq!(hook_stop_transcript(r#"{}"#), None);
     }
 }

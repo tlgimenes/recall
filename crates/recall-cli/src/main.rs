@@ -56,6 +56,11 @@ enum Cmd {
         #[arg(long)]
         reject: Option<String>,
     },
+    /// Hook entrypoint for plugins (reads the hook JSON on stdin)
+    Hook {
+        /// session-start | stop
+        event: String,
+    },
 }
 
 fn db_path() -> PathBuf {
@@ -105,6 +110,31 @@ async fn main() -> Result<()> {
                 println!("{}", recall_cli::cmd_review_reject(&db, &id)?);
             } else {
                 println!("{}", recall_cli::cmd_review_list(&db)?);
+            }
+        }
+        Cmd::Hook { event } => {
+            use std::io::Read;
+            let mut input = String::new();
+            std::io::stdin().read_to_string(&mut input).ok();
+            match event.as_str() {
+                "session-start" => {
+                    let out = recall_cli::hook_session_start(&db, &input)?;
+                    if !out.is_empty() {
+                        println!("{out}");
+                    }
+                }
+                "stop" => {
+                    if let Some(tp) = recall_cli::hook_stop_transcript(&input) {
+                        // fire-and-forget: run capture in the background, don't block session end
+                        if let Ok(exe) = std::env::current_exe() {
+                            let _ = std::process::Command::new(exe)
+                                .arg("capture")
+                                .arg(tp)
+                                .spawn();
+                        }
+                    }
+                }
+                other => eprintln!("unknown hook event: {other}"),
             }
         }
     }
