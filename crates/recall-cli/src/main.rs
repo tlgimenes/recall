@@ -96,7 +96,11 @@ async fn main() -> Result<()> {
         }
         Cmd::Review { accept, reject } => {
             if let Some(id) = accept {
-                println!("{}", recall_cli::cmd_review_accept(&db, &id)?);
+                let provider = agent_cli::detect();
+                println!(
+                    "{}",
+                    recall_cli::cmd_review_accept(&db, &id, provider.as_deref()).await?
+                );
             } else if let Some(id) = reject {
                 println!("{}", recall_cli::cmd_review_reject(&db, &id)?);
             } else {

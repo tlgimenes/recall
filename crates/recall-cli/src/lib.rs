@@ -1,7 +1,7 @@
 use agent_cli::AgentProvider;
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
-use recall_capture::{curate, extract};
+use recall_capture::{contradicts, curate, extract};
 use recall_core::{Convention, Provenance, Scope, Source, Status};
 use recall_inject::{detect_context, scope_label};
 use recall_store::Store;
@@ -197,17 +197,29 @@ pub fn cmd_review_list(db: &Path) -> Result<String> {
     Ok(s.trim_end().to_string())
 }
 
-pub fn cmd_review_accept(db: &Path, id_prefix: &str) -> Result<String> {
+pub async fn cmd_review_accept(
+    db: &Path,
+    id_prefix: &str,
+    provider: Option<&dyn AgentProvider>,
+) -> Result<String> {
     let store = Store::open(db)?;
     let mut c = find_by_prefix(&store, id_prefix)?;
-    // Retire any same-scope active rule with a different normalized text (supersession).
-    let n = recall_core::normalize_rule(&c.rule);
-    for e in store.active()? {
-        if e.scope == c.scope && recall_core::normalize_rule(&e.rule) != n {
-            let mut sup = e.clone();
-            sup.status = Status::Superseded;
-            sup.superseded_by = Some(c.id);
-            store.add(&sup)?;
+    // Only retire a same-scope active rule if an LLM judgment says it genuinely
+    // contradicts the one being accepted -- not merely "has different text".
+    // Without a provider, retire nothing else (safe no-op); manual review/accept
+    // must still work even when no LLM provider is available.
+    if let Some(p) = provider {
+        let n = recall_core::normalize_rule(&c.rule);
+        for e in store.active()? {
+            if e.scope == c.scope
+                && recall_core::normalize_rule(&e.rule) != n
+                && contradicts(p, &c.rule, &e.rule).await
+            {
+                let mut sup = e.clone();
+                sup.status = Status::Superseded;
+                sup.superseded_by = Some(c.id);
+                store.add(&sup)?;
+            }
         }
     }
     c.status = Status::Active;
@@ -306,9 +318,49 @@ mod tests {
         assert!(pending.contains("Use early returns"));
         let id = &pending[pending.find('[').unwrap() + 1..pending.find(']').unwrap()];
 
-        let accepted = cmd_review_accept(&db, id).unwrap();
+        let accepted = cmd_review_accept(&db, id, None).await.unwrap();
         assert!(accepted.to_lowercase().contains("accept"));
         assert!(cmd_list(&db).unwrap().contains("Use early returns")); // now Active
+    }
+
+    #[tokio::test]
+    async fn review_accept_without_provider_does_not_retire_unrelated_active_conventions() {
+        use agent_cli::MockProvider;
+        use serde_json::json;
+        let tmp = tempfile::tempdir().unwrap();
+        let db = tmp.path().join("recall.db");
+
+        // Seed two unrelated, pre-existing Active conventions in the same (global) scope.
+        cmd_learn(&db, "Use tabs not spaces", "global", vec![]).unwrap();
+        cmd_learn(&db, "Write tests for all new code", "global", vec![]).unwrap();
+
+        // Capture an unrelated Pending convention.
+        let transcript = tmp.path().join("t.txt");
+        std::fs::write(&transcript, "user: prefer early returns").unwrap();
+        let extractor = MockProvider::new(json!({"conventions":[
+            {"rule":"Prefer early returns","scope":"global","tags":[]}
+        ]}));
+        cmd_capture(
+            &db,
+            &transcript,
+            &recall_core::RepoContext::default(),
+            &extractor,
+        )
+        .await
+        .unwrap();
+
+        let pending = cmd_review_list(&db).unwrap();
+        assert!(pending.contains("Prefer early returns"));
+        let id = &pending[pending.find('[').unwrap() + 1..pending.find(']').unwrap()];
+
+        // Accept without a provider: this must NOT retire the unrelated Active conventions.
+        let accepted = cmd_review_accept(&db, id, None).await.unwrap();
+        assert!(accepted.to_lowercase().contains("accept"));
+
+        let listed = cmd_list(&db).unwrap();
+        assert!(listed.contains("Use tabs not spaces"));
+        assert!(listed.contains("Write tests for all new code"));
+        assert!(listed.contains("Prefer early returns"));
     }
 
     #[tokio::test]

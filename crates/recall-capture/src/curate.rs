@@ -60,7 +60,11 @@ pub fn candidate_to_convention(c: &Candidate, ctx: &RepoContext, now: DateTime<U
 }
 
 /// Ask the provider whether `new_rule` contradicts `existing_rule` (same scope).
-async fn contradicts(provider: &dyn AgentProvider, new_rule: &str, existing_rule: &str) -> bool {
+pub async fn contradicts(
+    provider: &dyn AgentProvider,
+    new_rule: &str,
+    existing_rule: &str,
+) -> bool {
     let schema = json!({"type":"object","properties":{"contradicts":{"type":"boolean"}},"required":["contradicts"]});
     let prompt = format!(
         "Do these two coding conventions directly contradict each other (one says to do \
