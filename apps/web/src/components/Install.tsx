@@ -3,7 +3,7 @@ import { CopyButton } from "./CopyButton";
 const INSTALL_ROWS: { label: string; cmd: string }[] = [
   {
     label: "1. Install",
-    cmd: "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/tlgimenes/recall/releases/latest/download/recall-cli-installer.sh | sh",
+    cmd: "curl -fsSL https://github.com/tlgimenes/recall/releases/latest/download/recall-cli-installer.sh | sh",
   },
   { label: "2. Register", cmd: "claude mcp add recall --scope user -- recall mcp" },
 ];
