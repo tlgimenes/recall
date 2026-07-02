@@ -1,0 +1,62 @@
+name: Publish npm
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish (e.g. v0.1.0)"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  npm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Resolve tag + version
+        id: v
+        run: |
+          TAG="${{ github.event.release.tag_name || inputs.tag }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download release binaries
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p dist-bin staged
+          cp -R packages/recall staged/recall
+          # Download cargo-dist archives, unpack, normalize to recall-<target>(.exe) in dist-bin/
+          gh release download "${{ steps.v.outputs.tag }}" -R tlgimenes/recall -p "*.tar.xz" -p "*.zip" -D archives
+          for f in archives/*; do
+            case "$f" in
+              *.tar.xz) tar -xJf "$f" -C archives ;;
+              *.zip)    unzip -o "$f" -d archives ;;
+            esac
+          done
+          # Each unpacked dir is named like recall-cli-<target>/ containing the binary.
+          for d in archives/recall-cli-*/; do
+            tgt="$(basename "$d" | sed 's/^recall-cli-//')"
+            if [ -f "$d/recall.exe" ]; then cp "$d/recall.exe" "dist-bin/recall-$tgt.exe";
+            else cp "$d/recall" "dist-bin/recall-$tgt"; fi
+          done
+          ls -la dist-bin
+
+      - name: Generate platform packages
+        run: node packages/recall/scripts/generate-packages.mjs "${{ steps.v.outputs.version }}" dist-bin staged
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > ~/.npmrc
+          for d in staged/recall-*/; do (cd "$d" && npm publish --access public); done
+          (cd staged/recall && npm publish --access public)
