@@ -28,9 +28,5 @@ export function StarCount() {
 
   if (stars === null) return null;
 
-  return (
-    <span className="ml-1.5 font-mono text-xs text-black/70" aria-label={`${stars} GitHub stars`}>
-      ★ {formatStars(stars)}
-    </span>
-  );
+  return <span aria-label={`${stars} GitHub stars`}>★ {formatStars(stars)}</span>;
 }

@@ -1,5 +1,4 @@
 import { CopyButton } from "./CopyButton";
-import { StarCount } from "./StarCount";
 import { Terminal } from "./Terminal";
 
 const GH = "https://github.com/tlgimenes/recall";
@@ -23,7 +22,7 @@ export function Hero() {
           once — it remembers and applies it in every repo, every branch, and every
           agent. Claude Code, Codex, and beyond.
         </p>
-        <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+        <div className="mt-8 flex flex-col items-stretch justify-center gap-3 sm:flex-row">
           <div className="flex w-full max-w-xl items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2.5 font-mono text-sm sm:w-auto">
             <span className="shrink-0 text-[var(--color-muted)]">$</span>
             <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-left">
@@ -33,9 +32,9 @@ export function Hero() {
           </div>
           <a
             href={GH}
-            className="flex shrink-0 items-center rounded-lg bg-[var(--color-accent)] px-4 py-2.5 text-sm font-semibold text-black transition hover:opacity-90"
+            className="flex shrink-0 items-center justify-center rounded-lg bg-[var(--color-accent)] px-4 py-2.5 text-sm font-semibold text-black transition hover:opacity-90"
           >
-            Star on GitHub →<StarCount />
+            Star on GitHub →
           </a>
         </div>
         <p className="mt-3 text-xs text-[var(--color-muted)]">
